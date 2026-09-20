@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Draw a Cartesian letter P with MoveIt in the Gazebo simulation."""
+"""Draw a Cartesian letter P with MoveIt."""
 
 import copy
 import math

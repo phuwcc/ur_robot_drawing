@@ -1,98 +1,49 @@
 # UR Robot Drawing
 
-ROS 2 Humble workspace chạy mô phỏng Universal Robots trong Gazebo và dùng
-MoveIt 2 để vẽ chữ **P** bằng TCP của robot.
+Package ROS 2 Humble chứa tính năng vẽ chữ **P** bằng MoveIt trên TCP của
+robot. Thư mục này chỉ chứa mã nguồn riêng của tính năng vẽ; không chứa mã
+nguồn Universal Robots, Gazebo hoặc MoveIt.
 
-## Yêu cầu
-
-- Ubuntu 22.04
-- ROS 2 Humble
-- `colcon`
-- `vcstool` (`vcs`)
-- Kết nối Internet để tải các repository phụ thuộc
-
-## Tải mã nguồn
-
-Clone repository cùng với submodule mô phỏng UR:
+## Build
 
 ```bash
-git clone --recurse-submodules -b main \
-  https://github.com/phuwcc/ur_robot_drawing.git
-cd ur_robot_drawing
-```
-
-Nếu đã clone mà chưa lấy submodule:
-
-```bash
-git submodule update --init --recursive
-```
-
-Submodule [`src/ur_simulation_gz`](src/ur_simulation_gz) sử dụng branch
-`humble` của `Universal_Robots_ROS2_GZ_Simulation`.
-
-## Cài dependency và build
-
-Workspace ROS nằm trong thư mục `ur_gz`:
-
-```bash
-cd ur_gz
+cd /home/phuc/ur_robot_drawing/ur_gz
 source /opt/ros/humble/setup.bash
-
-# Tải các repository phụ thuộc được khai báo bởi mô phỏng UR.
-vcs import src < src/ur_simulation_gz/ur_simulation_gz.humble.repos
-
 rosdep update
 rosdep install --ignore-src --from-paths src -r -y
-
 colcon build --symlink-install
 source install/setup.bash
 ```
 
-Nếu chỉ muốn build các package chính của project sau khi dependency đã được
-cài đặt:
+Repository Universal Robots riêng phải được build và source trước để cung cấp
+robot, TF, controller và các service MoveIt cần thiết. `ur_gz` không tải,
+chứa hoặc quản lý repository đó.
+
+## Chạy tính năng vẽ chữ P
+
+Sau khi robot stack và MoveIt đã chạy, từ thư mục `ur_gz` chạy:
 
 ```bash
-colcon build --packages-select ur_simulation_gz ur_drawing --symlink-install
-source install/setup.bash
-```
-
-## Chạy mô phỏng và vẽ chữ P
-
-Từ thư mục `ur_gz`, chạy một launch duy nhất:
-
-```bash
-source /opt/ros/humble/setup.bash
-source install/setup.bash
 ros2 launch ur_drawing draw_p.launch.py
 ```
 
-Launch này khởi động:
+Launch này chỉ khởi động node `draw_p` và tùy chọn RViz; nó không khởi động
+Gazebo, controller hoặc MoveIt. Mặc định `launch_rviz` là `false` để không
+mở thêm RViz nếu launch MoveIt đã mở RViz.
 
-1. Gazebo với robot UR3;
-2. `ur_control` và các controller mô phỏng;
-3. MoveIt 2;
-4. node `draw_p`;
-5. RViz với cấu hình hiển thị robot, chữ P mục tiêu và đường đi thực tế.
-
-Node sẽ chờ các service của MoveIt và TF cần thiết trước khi lập và thực thi
-quỹ đạo. Sau khi vẽ xong, node vẫn giữ hoạt động để đường đi còn hiển thị
-trong RViz.
-
-## Các tùy chọn thường dùng
-
-Chạy với UR3e:
+Để dùng RViz với cấu hình hiển thị robot của package này, chạy:
 
 ```bash
-ros2 launch ur_drawing draw_p.launch.py ur_type:=ur3e
+ros2 launch ur_drawing draw_p.launch.py launch_rviz:=true
 ```
 
-Chạy không mở giao diện Gazebo:
+Khi dùng cách này, hãy khởi động Gazebo bằng `ur_sim_control.launch.py
+launch_rviz:=false`, khởi động MoveIt bằng `ur_moveit_config` với
+`launch_rviz:=false`, rồi mới chạy launch trên. Không dùng
+`ur_sim_moveit.launch.py` trong quy trình này vì launch đó tự gọi lại control
+launch và mở RViz mặc định.
 
-```bash
-ros2 launch ur_drawing draw_p.launch.py gazebo_gui:=false
-```
-
-Chỉ lập quỹ đạo và không gửi lệnh chạy robot:
+Chỉ lập quỹ đạo, không gửi lệnh thực thi:
 
 ```bash
 ros2 launch ur_drawing draw_p.launch.py execute:=false
@@ -108,20 +59,17 @@ ros2 launch ur_drawing draw_p.launch.py \
 ```
 
 Các tham số vị trí tính theo `base_link`, đơn vị mét. `speed_scale` là hệ số
-tốc độ vẽ; giá trị mặc định là `0.125` (12.5%).
+tốc độ vẽ, mặc định là `0.125` (12.5%).
 
 ## Xử lý lỗi
 
-- **Không tìm thấy package hoặc launch file:** kiểm tra đã source cả
-  `/opt/ros/humble/setup.bash` và `install/setup.bash` trong đúng terminal
-  chưa.
-- **Thiếu package khi build:** chạy lại `rosdep install --ignore-src
-  --from-paths src -r -y` sau khi đã chạy `vcs import`.
+- **Không tìm thấy package hoặc launch file:** source cả
+  `/opt/ros/humble/setup.bash` và `install/setup.bash`.
+- **Không tìm thấy service MoveIt hoặc TF:** khởi động robot stack và MoveIt
+  từ repository Universal Robots riêng trước khi chạy launch này.
 - **`Incomplete path`:** vị trí hoặc kích thước chữ có thể nằm ngoài vùng làm
   việc của robot hoặc gây collision. Thử giảm `width`/`height`, thay đổi
   `x`, `y`, `z`, hoặc dùng `execute:=false` để kiểm tra trước.
-- **Gazebo/RViz chạy chậm:** dùng `gazebo_gui:=false` hoặc giảm tải các display
-  không cần thiết trong RViz.
 
-Tài liệu mô tả chi tiết hơn về hình học chữ P và các topic RViz nằm tại
+Tài liệu chi tiết về hình học chữ P và các topic RViz nằm tại
 [`src/ur_drawing/DRAW_P.md`](src/ur_drawing/DRAW_P.md).

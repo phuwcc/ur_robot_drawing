@@ -5,16 +5,17 @@ bằng các Cartesian waypoint trong mặt phẳng Y-Z của `base_link`. MoveIt
 IK, kiểm tra collision/self-collision, tạo joint trajectory và gửi trajectory
 đến controller của robot mô phỏng.
 
-Build từ thư mục `ur_gz` trong repository:
+Build package riêng từ thư mục `ur_gz`:
 
 ```bash
 cd ~/ur_robot_drawing/ur_gz
 source /opt/ros/humble/setup.bash
-colcon build --packages-select ur_simulation_gz ur_drawing --symlink-install
+colcon build --packages-select ur_drawing --symlink-install
 source install/setup.bash
 ```
 
-Một launch duy nhất khởi động UR3 simulation, MoveIt, node vẽ chữ và RViz:
+Robot simulation, controller và MoveIt phải được khởi động từ repository
+Universal Robots riêng trước. Sau đó chạy node vẽ và RViz:
 
 ```bash
 ros2 launch ur_drawing draw_p.launch.py
@@ -26,8 +27,8 @@ ros2 launch ur_drawing draw_p.launch.py
 ros2 launch ur_drawing draw_p.launch.py ur_type:=ur3e
 ```
 
-Node chờ MoveIt và TF sẵn sàng nên không cần mở terminal thứ hai. Node chạy một
-lần và giữ hoạt động để RViz vẫn nhận được đường đi. Cửa sổ RViz
+Node chờ MoveIt và TF sẵn sàng. Node chạy một lần và giữ hoạt động để RViz vẫn
+nhận được đường đi. Cửa sổ RViz
 mới hiển thị robot, chữ P mục tiêu màu xanh và vệt `tool0` thực tế màu cam.
 Chuyển động tiếp cận được thực hiện trước và không được ghi vào nét chữ.
 

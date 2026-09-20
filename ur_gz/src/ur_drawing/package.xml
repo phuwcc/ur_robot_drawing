@@ -3,7 +3,7 @@
 <package format="3">
   <name>ur_drawing</name>
   <version>0.1.0</version>
-  <description>Draw a Cartesian letter P with a Universal Robots simulation.</description>
+  <description>Draw a Cartesian letter P with MoveIt.</description>
 
   <maintainer email="phuc@example.com">Phuc</maintainer>
   <license>BSD-3-Clause</license>
@@ -19,7 +19,6 @@
   <exec_depend>rclpy</exec_depend>
   <exec_depend>rviz2</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
-  <exec_depend>ur_simulation_gz</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
