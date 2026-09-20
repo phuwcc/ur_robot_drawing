@@ -159,7 +159,7 @@ ros2 launch ur_simulation_gz ur_sim_control.launch.py \
 
 Giữ terminal này đang chạy.
 
-### Terminal 2: khởi động MoveIt nhưng không mở RViz
+### Terminal 2: khởi động MoveIt
 
 ```bash
 cd /home/phuc/ur_robot_drawing/ur_gz
