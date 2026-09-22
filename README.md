@@ -97,7 +97,7 @@ source /opt/ros/humble/setup.bash
 source install/setup.bash
 
 ros2 launch ur_simulation_gz ur_sim_control.launch.py \
-  ur_type:=ur3 launch_rviz:=false gazebo_gui:=true
+  ur_type:=ur3e launch_rviz:=false gazebo_gui:=true
 ```
 
 Launch này khởi động:
@@ -106,13 +106,6 @@ Launch này khởi động:
 - robot state publisher;
 - controller;
 - TF và `/robot_description`.
-
-Có thể thay `ur3` bằng loại robot được repo Universal Robots hỗ trợ:
-
-```bash
-ros2 launch ur_simulation_gz ur_sim_control.launch.py \
-  ur_type:=ur3e launch_rviz:=false gazebo_gui:=true
-```
 
 Giữ terminal này đang chạy.
 
@@ -124,7 +117,7 @@ source /opt/ros/humble/setup.bash
 source install/setup.bash
 
 ros2 launch ur_moveit_config ur_moveit.launch.py \
-  ur_type:=ur3 use_sim_time:=true launch_rviz:=false
+  ur_type:=ur3e use_sim_time:=true launch_rviz:=false
 ```
 
 Không chạy `ur_sim_moveit.launch.py` ở terminal này vì nó sẽ tự gọi lại
