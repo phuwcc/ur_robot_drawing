@@ -1,7 +1,7 @@
 # UR Robot Drawing
 
 Project ROS 2 Humble mô phỏng robot Universal Robots trong Gazebo và điều
-khiển TCP để vẽ chữ **P** bằng MoveIt 2.
+khiển EndEffector để vẽ chữ **P** bằng MoveIt 2.
 
 ## 1. Cấu trúc repository
 
@@ -181,7 +181,7 @@ ros2 launch ur_drawing draw_p.launch.py \
 | `execute` | `true` | có gửi trajectory tới robot hay không |
 | `launch_rviz` | `false` | có mở RViz riêng của `ur_drawing` hay không |
 
-Node giữ orientation hiện tại của TCP trong suốt nét vẽ. Đường chữ nằm trong
+Node giữ orientation hiện tại của EndEffector trong suốt nét vẽ. Đường chữ nằm trong
 mặt phẳng Y-Z của `base_link`.
 
 ## 10. Topic và frame
@@ -205,7 +205,7 @@ RViz có thể hiển thị:
 
 - robot state;
 - đường chữ mục tiêu màu xanh;
-- đường TCP thực tế màu cam;
+- đường EndEffector thực tế màu cam;
 - lưới mặt đất và mặt phẳng viết;
 - TF frames khi cần kiểm tra.
 
