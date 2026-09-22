@@ -1,9 +1,0 @@
-/home/phuc/ur_robot_drawing/build/ur_drawing/CMakeFiles/uninstall.dir
-/home/phuc/ur_robot_drawing/build/ur_drawing/CMakeFiles/ur_drawing_uninstall.dir
-/home/phuc/ur_robot_drawing/build/ur_drawing/CMakeFiles/test.dir
-/home/phuc/ur_robot_drawing/build/ur_drawing/CMakeFiles/edit_cache.dir
-/home/phuc/ur_robot_drawing/build/ur_drawing/CMakeFiles/rebuild_cache.dir
-/home/phuc/ur_robot_drawing/build/ur_drawing/CMakeFiles/list_install_components.dir
-/home/phuc/ur_robot_drawing/build/ur_drawing/CMakeFiles/install.dir
-/home/phuc/ur_robot_drawing/build/ur_drawing/CMakeFiles/install/local.dir
-/home/phuc/ur_robot_drawing/build/ur_drawing/CMakeFiles/install/strip.dir

@@ -1,2 +1,0 @@
-# Hashes of file build rules.
-07d96293785cb69ad19ed544a0051d0a CMakeFiles/ur_drawing_uninstall

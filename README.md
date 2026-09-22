@@ -30,24 +30,10 @@ vào các service/action đó để tạo và thực thi quỹ đạo.
 - Kết nối Internet để tải các dependency ROS
 - Gazebo và các package MoveIt/Universal Robots được khai báo bởi repo mô phỏng
 
-Nạp ROS 2 trong mỗi terminal làm việc:
-
-```bash
-source /opt/ros/humble/setup.bash
-```
-
 ## 3. Lấy source code
 
-Nếu đã có project:
-
 ```bash
-cd /home/phuc/ur_robot_drawing
-```
-
-Nếu clone lại từ Git:
-
-```bash
-git clone <URL_REPOSITORY_UR_ROBOT_DRAWING> ur_robot_drawing
+git clone https://github.com/phuwcc/ur_robot_drawing.git
 cd ur_robot_drawing
 ```
 
@@ -59,24 +45,10 @@ git clone -b humble \
   Universal_Robots_ROS2_GZ_Simulation
 ```
 
-Nếu thư mục repo đã tồn tại, kiểm tra branch:
+## 4. Build repo Universal Robots & ur_drawing
 
 ```bash
-cd Universal_Robots_ROS2_GZ_Simulation
-git status
-git branch --show-current
-cd ..
-```
-
-Kết quả branch nên là `humble`.
-
-## 4. Build repo Universal Robots
-
-Repo Universal Robots là một ROS workspace độc lập. Không build package
-`ur_drawing` trong workspace này.
-
-```bash
-cd /home/phuc/ur_robot_drawing/Universal_Robots_ROS2_GZ_Simulation
+cd /home/phuc/ur_robot_drawing
 source /opt/ros/humble/setup.bash
 
 # Tải các repository phụ thuộc được khai báo cho Humble.
@@ -89,22 +61,7 @@ colcon build --symlink-install
 source install/setup.bash
 ```
 
-Kiểm tra package mô phỏng đã được đăng ký:
-
-```bash
-ros2 pkg prefix ur_simulation_gz
-```
-
-Kết quả phải trỏ tới thư mục `install` của
-`Universal_Robots_ROS2_GZ_Simulation`.
-
 ## 5. Build package `ur_drawing`
-
-Mở một terminal mới, hoặc tiếp tục terminal sau khi source ROS 2:
-
-```bash
-cd /home/phuc/ur_robot_drawing/ur_gz
-source /opt/ros/humble/setup.bash
 
 rosdep update
 rosdep install --ignore-src --from-paths src -r -y
@@ -135,7 +92,7 @@ tự mở RViz mặc định của MoveIt.
 ### Terminal 1: khởi động Gazebo và controller
 
 ```bash
-cd /home/phuc/ur_robot_drawing/Universal_Robots_ROS2_GZ_Simulation
+cd /home/phuc/ur_robot_drawing
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 
@@ -162,7 +119,7 @@ Giữ terminal này đang chạy.
 ### Terminal 2: khởi động MoveIt
 
 ```bash
-cd /home/phuc/ur_robot_drawing/ur_gz
+cd /home/phuc/ur_robot_drawing
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 
@@ -181,7 +138,7 @@ control launch và có thể tạo Gazebo thứ hai. Cần bảo đảm MoveIt c
 ### Terminal 3: chạy package vẽ và RViz riêng
 
 ```bash
-cd /home/phuc/ur_robot_drawing/ur_gz
+cd /home/phuc/ur_robot_drawing
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 
@@ -198,7 +155,7 @@ khởi động Gazebo, controller, robot description hoặc MoveIt.
 
 ## 8. Chạy thử không điều khiển robot
 
-Để xem hình học đường mục tiêu (không lập quỹ đạo MoveIt, không di chuyển robot):
+Để lập quỹ đạo và kiểm tra khả năng tính toán nhưng không gửi lệnh thực thi:
 
 ```bash
 ros2 launch ur_drawing draw_p.launch.py execute:=false
@@ -258,3 +215,4 @@ RViz có thể hiển thị:
 - đường TCP thực tế màu cam;
 - lưới mặt đất và mặt phẳng viết;
 - TF frames khi cần kiểm tra.
+
