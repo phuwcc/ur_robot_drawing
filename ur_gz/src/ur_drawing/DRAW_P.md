@@ -72,25 +72,3 @@ bật kiểm tra va chạm và từ chối chạy khi quỹ đạo không đầy
 không được đảm bảo khả thi với mọi tư thế ban đầu: nếu báo `Incomplete path`,
 chỉnh vị trí/kích thước chữ hoặc dùng MoveIt đưa robot gần chân chữ trước.
 Node yêu cầu `use_sim_time:=true`; launch đã đặt sẵn tham số này.
-
-## Vẽ hình tròn và cách tiếp cận điểm đầu
-
-```bash
-ros2 launch ur_drawing draw_p.launch.py shape:=circle radius:=0.04 launch_rviz:=true
-```
-
-`shape:=p` (mặc định) vẽ chữ P; `shape:=circle` vẽ hình tròn bán kính
-`radius` (mặc định 0.04 m). Cả hai nằm trong mặt phẳng Y-Z.
-Với chữ P, `(x, y, z)` là chân chữ. Với hình tròn, đó là tâm;
-điểm bắt đầu là `(x, y, z - radius)` và đường kết thúc tại chính điểm đầu.
-
-Luồng chạy: tạo waypoint → MoveIt lập đường tới waypoint đầu → giữ hướng
-TCP vừa đạt được → lập và thực thi đường Cartesian của hình.
-MoveIt tự chọn hướng TCP khi tiếp cận, không cần cấu hình khớp cố định của UR3.
-Đoạn tiếp cận có kiểm tra va chạm nhưng không bắt buộc là đường thẳng;
-nó không được ghi vào nét vẽ màu cam. Nếu hướng TCP đạt được không cho phép
-vẽ toàn bộ hình, node dừng và báo lỗi, không thực thi nét vẽ dở dang.
-Đoạn tiếp cận có thể đã hoàn thành trước khi phát hiện lỗi này.
-
-Đây là vẽ đường TCP trong mô phỏng, chưa có thao tác nhấc/hạ bút hoặc tiếp xúc
-mặt giấy. Tên launch và topic `/draw_p/*` được giữ để dùng cấu hình RViz cũ.

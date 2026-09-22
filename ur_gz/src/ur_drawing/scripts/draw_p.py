@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Draw a letter P or circle in the Y-Z plane with MoveIt."""
+"""Draw a letter P in the Y-Z plane with MoveIt."""
 
 import copy
 import math
@@ -39,28 +39,13 @@ def letter_p(x, y, z, width, height, step):
     return points
 
 
-def circle(x, y, z, radius, step):
-    """Circle centered at (x, y, z), starting at its lowest point."""
-    if not all(math.isfinite(v) for v in (x, y, z, radius, step)):
-        raise ValueError("Coordinates and dimensions must be finite")
-    if min(radius, step) <= 0:
-        raise ValueError("radius and step must be positive")
-    count = max(12, math.ceil(2 * math.pi * radius / step))
-    points = [
-        (x, y + radius * math.sin(2 * math.pi * i / count),
-         z - radius * math.cos(2 * math.pi * i / count))
-        for i in range(count)
-    ]
-    return points + [points[0]]
-
-
 class DrawingNode(Node):
     def __init__(self):
         super().__init__("draw_p")
         defaults = {
             "frame_id": "base_link", "ee_link": "tool0", "group_name": "ur_manipulator",
             "x": 0.30, "y": -0.08, "z": 0.18, "width": 0.06, "height": 0.12,
-            "shape": "p", "radius": 0.04, "step": 0.004, "speed_scale": 0.125, "execute": True,
+            "step": 0.004, "speed_scale": 0.125, "execute": True,
         }
         for name, value in defaults.items():
             self.declare_parameter(name, value)
@@ -238,14 +223,7 @@ class DrawingNode(Node):
     def run(self):
         if not self.cfg["use_sim_time"]:
             raise RuntimeError("This node is for simulation; set use_sim_time:=true")
-        shape = self.cfg["shape"].lower()
-        if shape == "p":
-            keys, generator = ("x", "y", "z", "width", "height", "step"), letter_p
-        elif shape == "circle":
-            keys, generator = ("x", "y", "z", "radius", "step"), circle
-        else:
-            raise ValueError("shape must be 'p' or 'circle'")
-        points = generator(*(self.cfg[k] for k in keys))
+        points = letter_p(*(self.cfg[k] for k in ("x", "y", "z", "width", "height", "step")))
         deadline = time.monotonic() + 30.0
         while rclpy.ok():
             rclpy.spin_once(self, timeout_sec=0.1)
@@ -258,7 +236,7 @@ class DrawingNode(Node):
         else:
             return
         target = self.make_target_path(points, current.orientation)
-        self.get_logger().info(f"Published {shape} on /draw_p/target_path")
+        self.get_logger().info("Published letter P on /draw_p/target_path")
         if not self.cfg["execute"]:
             self.get_logger().info("Geometry preview only; no planning or robot motion")
             return
@@ -273,9 +251,9 @@ class DrawingNode(Node):
             raise RuntimeError("TCP stopped more than 1 cm from the first waypoint")
         target = self.make_target_path(points, current.orientation)
         drawing = self.compute_cartesian(
-            [p.pose for p in target.poses], target.header, f"{shape} path")
+            [p.pose for p in target.poses], target.header, "letter P path")
         self.execute_trajectory(drawing, trace=True)
-        self.get_logger().info(f"Finished drawing {shape}. Paths remain visible while this node runs.")
+        self.get_logger().info("Finished drawing letter P. Paths remain visible while this node runs.")
 
 
 def main():

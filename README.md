@@ -1,7 +1,7 @@
 # UR Robot Drawing
 
 Project ROS 2 Humble mô phỏng robot Universal Robots trong Gazebo và điều
-khiển TCP để vẽ chữ **P** hoặc **hình tròn** bằng MoveIt 2.
+khiển TCP để vẽ chữ **P** bằng MoveIt 2.
 
 ## 1. Cấu trúc repository
 
@@ -221,11 +221,9 @@ ros2 launch ur_drawing draw_p.launch.py \
 
 | Tham số | Mặc định | Ý nghĩa |
 | --- | ---: | --- |
-| `x` | `0.30` | tọa độ X của chân chữ hoặc tâm tròn trong `base_link`, mét |
-| `y` | `-0.08` | tọa độ Y của chân chữ hoặc tâm tròn trong `base_link`, mét |
-| `z` | `0.18` | tọa độ Z của chân chữ hoặc tâm tròn trong `base_link`, mét |
-| `shape` | `p` | hình cần vẽ: `p` hoặc `circle` |
-| `radius` | `0.04` | bán kính hình tròn, mét |
+| `x` | `0.30` | tọa độ X của chân chữ trong `base_link`, mét |
+| `y` | `-0.08` | tọa độ Y của chân chữ trong `base_link`, mét |
+| `z` | `0.18` | tọa độ Z của chân chữ trong `base_link`, mét |
 | `width` | `0.06` | chiều rộng chữ P, mét |
 | `height` | `0.12` | chiều cao chữ P, mét |
 | `step` | `0.004` | khoảng cách giữa các Cartesian waypoint, mét |
@@ -260,94 +258,3 @@ RViz có thể hiển thị:
 - đường TCP thực tế màu cam;
 - lưới mặt đất và mặt phẳng viết;
 - TF frames khi cần kiểm tra.
-
-## 11. Xử lý lỗi thường gặp
-
-### `Package 'ur_drawing' not found`
-
-Build và source đúng workspace:
-
-```bash
-cd /home/phuc/ur_robot_drawing/ur_gz
-source /opt/ros/humble/setup.bash
-colcon build --packages-select ur_drawing --symlink-install
-source install/setup.bash
-ros2 pkg prefix ur_drawing
-```
-
-Không chỉ source `install/setup.bash` của repo Universal Robots; package
-`ur_drawing` nằm trong workspace `ur_gz`.
-
-### Không tìm thấy `ur_simulation_gz`
-
-Kiểm tra đang source đúng workspace Universal Robots:
-
-```bash
-cd /home/phuc/ur_robot_drawing/Universal_Robots_ROS2_GZ_Simulation
-source /opt/ros/humble/setup.bash
-source install/setup.bash
-ros2 pkg prefix ur_simulation_gz
-```
-
-### Không tìm thấy service MoveIt hoặc TF
-
-Phải chạy cả hai launch của repo Universal Robots trước khi chạy
-`ur_drawing`. Kiểm tra nhanh:
-
-```bash
-ros2 service list | grep compute_cartesian_path
-ros2 action list | grep execute_trajectory
-ros2 run tf2_ros tf2_echo base_link tool0
-```
-
-### `Incomplete path`
-
-MoveIt không lập được toàn bộ Cartesian path. Thử:
-
-- giảm `width` hoặc `height`;
-- thay đổi `x`, `y`, `z` để đưa chữ vào workspace;
-- giảm `step`;
-- dùng `execute:=false` để xem vị trí hình (không kiểm tra khả năng thực thi);
-- đưa robot về tư thế khởi đầu ổn định.
-
-### Gazebo hoặc RViz chạy chậm
-
-Chạy Gazebo không giao diện nếu launch của repo Universal Robots hỗ trợ:
-
-```bash
-ros2 launch ur_simulation_gz ur_sim_control.launch.py \
-  ur_type:=ur3 launch_rviz:=false gazebo_gui:=true
-```
-
-Launch tổng hợp của repo Universal Robots sẽ mở một Gazebo và một RViz. Nếu
-cần chạy không giao diện Gazebo, hãy xem các launch argument được repo đó cung
-cấp cho đúng branch đang dùng; không sửa trực tiếp repo gốc trong project này.
-
-## 12. Tài liệu liên quan
-
-- Hướng dẫn riêng của package: [`ur_gz/README.md`](ur_gz/README.md)
-- Mô tả hình học và RViz: [`ur_gz/src/ur_drawing/DRAW_P.md`](ur_gz/src/ur_drawing/DRAW_P.md)
-- Repo mô phỏng Universal Robots:
-  [`Universal_Robots_ROS2_GZ_Simulation/`](Universal_Robots_ROS2_GZ_Simulation/)
-
-## Vẽ hình tròn và cách tiếp cận điểm đầu
-
-```bash
-ros2 launch ur_drawing draw_p.launch.py shape:=circle radius:=0.04 launch_rviz:=true
-```
-
-`shape:=p` (mặc định) vẽ chữ P; `shape:=circle` vẽ hình tròn bán kính
-`radius` (mặc định 0.04 m). Cả hai nằm trong mặt phẳng Y-Z.
-Với chữ P, `(x, y, z)` là chân chữ. Với hình tròn, đó là tâm;
-điểm bắt đầu là `(x, y, z - radius)` và đường kết thúc tại chính điểm đầu.
-
-Luồng chạy: tạo waypoint → MoveIt lập đường tới waypoint đầu → giữ hướng
-TCP vừa đạt được → lập và thực thi đường Cartesian của hình.
-MoveIt tự chọn hướng TCP khi tiếp cận, không cần cấu hình khớp cố định của UR3.
-Đoạn tiếp cận có kiểm tra va chạm nhưng không bắt buộc là đường thẳng;
-nó không được ghi vào nét vẽ màu cam. Nếu hướng TCP đạt được không cho phép
-vẽ toàn bộ hình, node dừng và báo lỗi, không thực thi nét vẽ dở dang.
-Đoạn tiếp cận có thể đã hoàn thành trước khi phát hiện lỗi này.
-
-Đây là vẽ đường TCP trong mô phỏng, chưa có thao tác nhấc/hạ bút hoặc tiếp xúc
-mặt giấy. Tên launch và topic `/draw_p/*` được giữ để dùng cấu hình RViz cũ.

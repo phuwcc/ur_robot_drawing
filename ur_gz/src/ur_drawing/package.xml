@@ -3,7 +3,7 @@
 <package format="3">
   <name>ur_drawing</name>
   <version>0.1.0</version>
-  <description>Draw a Cartesian letter P or circle with MoveIt.</description>
+  <description>Draw a Cartesian letter P with MoveIt.</description>
 
   <maintainer email="phuc@example.com">Phuc</maintainer>
   <license>BSD-3-Clause</license>

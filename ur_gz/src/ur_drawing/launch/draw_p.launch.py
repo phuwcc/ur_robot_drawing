@@ -14,8 +14,6 @@ def generate_launch_description():
         "x": "0.30",
         "y": "-0.08",
         "z": "0.18",
-        "shape": "p",
-        "radius": "0.04",
         "width": "0.06",
         "height": "0.12",
         "step": "0.004",
@@ -26,10 +24,9 @@ def generate_launch_description():
     arguments = [DeclareLaunchArgument(k, default_value=v) for k, v in defaults.items()]
     parameters = {
         k: ParameterValue(LaunchConfiguration(k), value_type=float)
-        for k in ("x", "y", "z", "width", "height", "radius", "step", "speed_scale")
+        for k in ("x", "y", "z", "width", "height", "step", "speed_scale")
     }
     parameters.update({
-        "shape": ParameterValue(LaunchConfiguration("shape"), value_type=str),
         "use_sim_time": True,
         "execute": ParameterValue(LaunchConfiguration("execute"), value_type=bool),
     })

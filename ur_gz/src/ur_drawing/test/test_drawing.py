@@ -18,26 +18,12 @@ spec.loader.exec_module(drawing)
 
 
 class DrawingTests(unittest.TestCase):
-    def test_circle_is_closed_and_on_requested_plane(self):
-        points = drawing.circle(0.3, -0.08, 0.18, 0.04, 0.004)
-        self.assertEqual(points[0], points[-1])
-        self.assertAlmostEqual(points[0][2], 0.14)
-        for x, y, z in points:
-            self.assertEqual(x, 0.3)
-            self.assertAlmostEqual(math.hypot(y + 0.08, z - 0.18), 0.04)
-        self.assertLessEqual(max(math.dist(a, b) for a, b in zip(points, points[1:])), 0.004)
-
     def test_letter_endpoints_and_spacing(self):
         points = drawing.letter_p(0.3, -0.08, 0.18, 0.06, 0.12, 0.004)
         self.assertEqual(points[0], (0.3, -0.08, 0.18))
         self.assertAlmostEqual(points[-1][1], -0.08)
         self.assertAlmostEqual(points[-1][2], 0.24)
         self.assertLessEqual(max(math.dist(a, b) for a, b in zip(points, points[1:])), 0.004 + 1e-12)
-
-    def test_invalid_circle_dimensions(self):
-        for radius in (0, -1, math.nan, math.inf):
-            with self.assertRaises(ValueError):
-                drawing.circle(0.3, 0, 0.2, radius, 0.004)
 
     def test_cartesian_speed_and_partial_path_rejection(self):
         node = Mock()
