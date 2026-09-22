@@ -1,7 +1,7 @@
 # UR Robot Drawing
 
 Project ROS 2 Humble mô phỏng robot Universal Robots trong Gazebo và điều
-khiển TCP để vẽ chữ **P** bằng MoveIt 2.
+khiển TCP để vẽ chữ **P** hoặc **hình tròn** bằng MoveIt 2.
 
 ## 1. Cấu trúc repository
 
@@ -198,7 +198,7 @@ khởi động Gazebo, controller, robot description hoặc MoveIt.
 
 ## 8. Chạy thử không điều khiển robot
 
-Để lập quỹ đạo và kiểm tra khả năng tính toán nhưng không gửi lệnh thực thi:
+Để xem hình học đường mục tiêu (không lập quỹ đạo MoveIt, không di chuyển robot):
 
 ```bash
 ros2 launch ur_drawing draw_p.launch.py execute:=false
@@ -221,9 +221,11 @@ ros2 launch ur_drawing draw_p.launch.py \
 
 | Tham số | Mặc định | Ý nghĩa |
 | --- | ---: | --- |
-| `x` | `0.30` | tọa độ X của chân chữ trong `base_link`, mét |
-| `y` | `-0.08` | tọa độ Y của chân chữ trong `base_link`, mét |
-| `z` | `0.18` | tọa độ Z của chân chữ trong `base_link`, mét |
+| `x` | `0.30` | tọa độ X của chân chữ hoặc tâm tròn trong `base_link`, mét |
+| `y` | `-0.08` | tọa độ Y của chân chữ hoặc tâm tròn trong `base_link`, mét |
+| `z` | `0.18` | tọa độ Z của chân chữ hoặc tâm tròn trong `base_link`, mét |
+| `shape` | `p` | hình cần vẽ: `p` hoặc `circle` |
+| `radius` | `0.04` | bán kính hình tròn, mét |
 | `width` | `0.06` | chiều rộng chữ P, mét |
 | `height` | `0.12` | chiều cao chữ P, mét |
 | `step` | `0.004` | khoảng cách giữa các Cartesian waypoint, mét |
@@ -305,7 +307,7 @@ MoveIt không lập được toàn bộ Cartesian path. Thử:
 - giảm `width` hoặc `height`;
 - thay đổi `x`, `y`, `z` để đưa chữ vào workspace;
 - giảm `step`;
-- chạy trước với `execute:=false`;
+- dùng `execute:=false` để xem vị trí hình (không kiểm tra khả năng thực thi);
 - đưa robot về tư thế khởi đầu ổn định.
 
 ### Gazebo hoặc RViz chạy chậm
@@ -327,3 +329,25 @@ cấp cho đúng branch đang dùng; không sửa trực tiếp repo gốc trong
 - Mô tả hình học và RViz: [`ur_gz/src/ur_drawing/DRAW_P.md`](ur_gz/src/ur_drawing/DRAW_P.md)
 - Repo mô phỏng Universal Robots:
   [`Universal_Robots_ROS2_GZ_Simulation/`](Universal_Robots_ROS2_GZ_Simulation/)
+
+## Vẽ hình tròn và cách tiếp cận điểm đầu
+
+```bash
+ros2 launch ur_drawing draw_p.launch.py shape:=circle radius:=0.04 launch_rviz:=true
+```
+
+`shape:=p` (mặc định) vẽ chữ P; `shape:=circle` vẽ hình tròn bán kính
+`radius` (mặc định 0.04 m). Cả hai nằm trong mặt phẳng Y-Z.
+Với chữ P, `(x, y, z)` là chân chữ. Với hình tròn, đó là tâm;
+điểm bắt đầu là `(x, y, z - radius)` và đường kết thúc tại chính điểm đầu.
+
+Luồng chạy: tạo waypoint → MoveIt lập đường tới waypoint đầu → giữ hướng
+TCP vừa đạt được → lập và thực thi đường Cartesian của hình.
+MoveIt tự chọn hướng TCP khi tiếp cận, không cần cấu hình khớp cố định của UR3.
+Đoạn tiếp cận có kiểm tra va chạm nhưng không bắt buộc là đường thẳng;
+nó không được ghi vào nét vẽ màu cam. Nếu hướng TCP đạt được không cho phép
+vẽ toàn bộ hình, node dừng và báo lỗi, không thực thi nét vẽ dở dang.
+Đoạn tiếp cận có thể đã hoàn thành trước khi phát hiện lỗi này.
+
+Đây là vẽ đường TCP trong mô phỏng, chưa có thao tác nhấc/hạ bút hoặc tiếp xúc
+mặt giấy. Tên launch và topic `/draw_p/*` được giữ để dùng cấu hình RViz cũ.

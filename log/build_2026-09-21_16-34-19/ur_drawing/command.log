@@ -1,0 +1,6 @@
+Invoking command in '/tmp/ur_drawing_build/ur_drawing': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /home/phuc/ur_robot_drawing/ur_gz/src/ur_drawing -DCMAKE_INSTALL_PREFIX=/tmp/ur_drawing_install/ur_drawing
+Invoked command in '/tmp/ur_drawing_build/ur_drawing' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /home/phuc/ur_robot_drawing/ur_gz/src/ur_drawing -DCMAKE_INSTALL_PREFIX=/tmp/ur_drawing_install/ur_drawing
+Invoking command in '/tmp/ur_drawing_build/ur_drawing': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /tmp/ur_drawing_build/ur_drawing -- -j12 -l12
+Invoked command in '/tmp/ur_drawing_build/ur_drawing' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /tmp/ur_drawing_build/ur_drawing -- -j12 -l12
+Invoking command in '/tmp/ur_drawing_build/ur_drawing': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /tmp/ur_drawing_build/ur_drawing
+Invoked command in '/tmp/ur_drawing_build/ur_drawing' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /tmp/ur_drawing_build/ur_drawing

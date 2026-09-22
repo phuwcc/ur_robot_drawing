@@ -1,0 +1,4 @@
+Invoking command in '/home/phuc/ur_robot_drawing/build/ur_simulation_gz': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/phuc/ur_robot_drawing/build/ur_simulation_gz -- -j12 -l12
+Invoked command in '/home/phuc/ur_robot_drawing/build/ur_simulation_gz' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/phuc/ur_robot_drawing/build/ur_simulation_gz -- -j12 -l12
+Invoking command in '/home/phuc/ur_robot_drawing/build/ur_simulation_gz': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /home/phuc/ur_robot_drawing/build/ur_simulation_gz
+Invoked command in '/home/phuc/ur_robot_drawing/build/ur_simulation_gz' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /home/phuc/ur_robot_drawing/build/ur_simulation_gz

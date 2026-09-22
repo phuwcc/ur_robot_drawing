@@ -1,6 +1,6 @@
 # UR Robot Drawing
 
-Package ROS 2 Humble chứa tính năng vẽ chữ **P** bằng MoveIt trên TCP của
+Package ROS 2 Humble chứa tính năng vẽ chữ **P** hoặc **hình tròn** bằng MoveIt trên TCP của
 robot. Thư mục này chỉ chứa mã nguồn riêng của tính năng vẽ; không chứa mã
 nguồn Universal Robots, Gazebo hoặc MoveIt.
 
@@ -43,7 +43,7 @@ launch_rviz:=false`, khởi động MoveIt bằng `ur_moveit_config` với
 `ur_sim_moveit.launch.py` trong quy trình này vì launch đó tự gọi lại control
 launch và mở RViz mặc định.
 
-Chỉ lập quỹ đạo, không gửi lệnh thực thi:
+Chỉ xem hình học đường mục tiêu; không lập quỹ đạo MoveIt hoặc di chuyển robot:
 
 ```bash
 ros2 launch ur_drawing draw_p.launch.py execute:=false
@@ -69,7 +69,29 @@ tốc độ vẽ, mặc định là `0.125` (12.5%).
   từ repository Universal Robots riêng trước khi chạy launch này.
 - **`Incomplete path`:** vị trí hoặc kích thước chữ có thể nằm ngoài vùng làm
   việc của robot hoặc gây collision. Thử giảm `width`/`height`, thay đổi
-  `x`, `y`, `z`, hoặc dùng `execute:=false` để kiểm tra trước.
+  `x`, `y`, `z`, hoặc đưa robot về tư thế khởi đầu khác.
 
 Tài liệu chi tiết về hình học chữ P và các topic RViz nằm tại
 [`src/ur_drawing/DRAW_P.md`](src/ur_drawing/DRAW_P.md).
+
+## Vẽ hình tròn và cách tiếp cận điểm đầu
+
+```bash
+ros2 launch ur_drawing draw_p.launch.py shape:=circle radius:=0.04 launch_rviz:=true
+```
+
+`shape:=p` (mặc định) vẽ chữ P; `shape:=circle` vẽ hình tròn bán kính
+`radius` (mặc định 0.04 m). Cả hai nằm trong mặt phẳng Y-Z.
+Với chữ P, `(x, y, z)` là chân chữ. Với hình tròn, đó là tâm;
+điểm bắt đầu là `(x, y, z - radius)` và đường kết thúc tại chính điểm đầu.
+
+Luồng chạy: tạo waypoint → MoveIt lập đường tới waypoint đầu → giữ hướng
+TCP vừa đạt được → lập và thực thi đường Cartesian của hình.
+MoveIt tự chọn hướng TCP khi tiếp cận, không cần cấu hình khớp cố định của UR3.
+Đoạn tiếp cận có kiểm tra va chạm nhưng không bắt buộc là đường thẳng;
+nó không được ghi vào nét vẽ màu cam. Nếu hướng TCP đạt được không cho phép
+vẽ toàn bộ hình, node dừng và báo lỗi, không thực thi nét vẽ dở dang.
+Đoạn tiếp cận có thể đã hoàn thành trước khi phát hiện lỗi này.
+
+Đây là vẽ đường TCP trong mô phỏng, chưa có thao tác nhấc/hạ bút hoặc tiếp xúc
+mặt giấy. Tên launch và topic `/draw_p/*` được giữ để dùng cấu hình RViz cũ.

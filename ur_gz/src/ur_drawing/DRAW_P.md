@@ -21,11 +21,7 @@ Universal Robots riêng trước. Sau đó chạy node vẽ và RViz:
 ros2 launch ur_drawing draw_p.launch.py
 ```
 
-Đổi sang UR3e bằng launch argument:
-
-```bash
-ros2 launch ur_drawing draw_p.launch.py ur_type:=ur3e
-```
+Để dùng UR3e, đặt `ur_type:=ur3e` trong launch mô phỏng và MoveIt.
 
 Node chờ MoveIt và TF sẵn sàng. Node chạy một lần và giữ hoạt động để RViz vẫn
 nhận được đường đi. Cửa sổ RViz
@@ -49,8 +45,7 @@ cần kiểm tra các frame.
   `Robot overview`.
 
 Chữ nằm trong mặt phẳng Y–Z của `base_link`, chân chữ cố định tại
-`(0.30, -0.08, 0.18)` m, rộng 0.06 m và cao 0.12 m. Robot đầu tiên đi tới một
-cấu hình khớp ổn định, sau đó đi Cartesian tới chân chữ và giữ orientation này
+`(0.30, -0.08, 0.18)` m, rộng 0.06 m và cao 0.12 m. Robot đi trực tiếp tới chân chữ bằng MoveIt và giữ orientation đạt được
 trong toàn bộ nét chữ. Robot đi từ chân
 chữ lên đỉnh, sau đó vẽ nửa ellipse về giữa thân chữ. Đây là đường TCP trong
 không gian, không tạo nét mực hoặc tiếp xúc với bề mặt trong Gazebo.
@@ -62,7 +57,7 @@ không gian, không tạo nét mực hoặc tiếp xúc với bề mặt trong G
 ros2 launch ur_drawing draw_p.launch.py x:=0.30 y:=-0.08 z:=0.18 width:=0.06 height:=0.12 speed_scale:=0.125
 ```
 
-Để xem trước và kiểm tra khả năng lập quỹ đạo mà chưa chạy robot:
+Để xem trước hình học đường mục tiêu, không lập quỹ đạo hoặc chạy robot:
 
 ```bash
 ros2 launch ur_drawing draw_p.launch.py execute:=false
@@ -77,3 +72,25 @@ bật kiểm tra va chạm và từ chối chạy khi quỹ đạo không đầy
 không được đảm bảo khả thi với mọi tư thế ban đầu: nếu báo `Incomplete path`,
 chỉnh vị trí/kích thước chữ hoặc dùng MoveIt đưa robot gần chân chữ trước.
 Node yêu cầu `use_sim_time:=true`; launch đã đặt sẵn tham số này.
+
+## Vẽ hình tròn và cách tiếp cận điểm đầu
+
+```bash
+ros2 launch ur_drawing draw_p.launch.py shape:=circle radius:=0.04 launch_rviz:=true
+```
+
+`shape:=p` (mặc định) vẽ chữ P; `shape:=circle` vẽ hình tròn bán kính
+`radius` (mặc định 0.04 m). Cả hai nằm trong mặt phẳng Y-Z.
+Với chữ P, `(x, y, z)` là chân chữ. Với hình tròn, đó là tâm;
+điểm bắt đầu là `(x, y, z - radius)` và đường kết thúc tại chính điểm đầu.
+
+Luồng chạy: tạo waypoint → MoveIt lập đường tới waypoint đầu → giữ hướng
+TCP vừa đạt được → lập và thực thi đường Cartesian của hình.
+MoveIt tự chọn hướng TCP khi tiếp cận, không cần cấu hình khớp cố định của UR3.
+Đoạn tiếp cận có kiểm tra va chạm nhưng không bắt buộc là đường thẳng;
+nó không được ghi vào nét vẽ màu cam. Nếu hướng TCP đạt được không cho phép
+vẽ toàn bộ hình, node dừng và báo lỗi, không thực thi nét vẽ dở dang.
+Đoạn tiếp cận có thể đã hoàn thành trước khi phát hiện lỗi này.
+
+Đây là vẽ đường TCP trong mô phỏng, chưa có thao tác nhấc/hạ bút hoặc tiếp xúc
+mặt giấy. Tên launch và topic `/draw_p/*` được giữ để dùng cấu hình RViz cũ.
