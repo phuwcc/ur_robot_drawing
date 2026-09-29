@@ -9,7 +9,7 @@ from std_msgs.msg import String
 from .config import load_world, student_mapping
 from .physical_gripper import PhysicalGripper
 from .moveit_cartesian_client import MoveItClient
-from .planner import NineRouterPlanner, PlannerError, mock_plan
+from .planner import GeminiPlanner, PlannerError, mock_plan
 from .skills import SkillExecutor
 from .validator import PlanValidationError, parse_and_validate
 
@@ -22,10 +22,9 @@ class LlmSkillNode(Node):
             "world_config": default_config,
             "student_name": "YOUR_NAME",
             "student_id": "00000000",
-            "router_base_url": "http://127.0.0.1:20128/v1",
-            "router_model": "oc/muse-spark-1.3-contributor-free",
-            "router_api_key_env": "NINE_ROUTER_API_KEY",
-            "router_timeout": 30.0,
+            "gemini_model": "gemini-2.5-flash",
+            "gemini_api_key_env": "GEMINI_API_KEY",
+            "gemini_timeout": 30.0,
             "mock_llm": False,
         }
         for name, value in defaults.items():
@@ -45,9 +44,11 @@ class LlmSkillNode(Node):
         )
         self.moveit = MoveItClient(self, self.world)
         self.skills = SkillExecutor(self.moveit, self.gripper, self.world, self.report)
-        self.planner = NineRouterPlanner(
-            self.params["router_base_url"], self.params["router_model"],
-            self.params["router_api_key_env"], float(self.params["router_timeout"]))
+        self.planner = GeminiPlanner(
+            self.params["gemini_model"],
+            self.params["gemini_api_key_env"],
+            float(self.params["gemini_timeout"]),
+        )
         self.busy_lock = threading.Lock()
 
         mapping_text = ", ".join(f"{key}={value}" for key, value in self.mapping.items())
@@ -56,7 +57,7 @@ class LlmSkillNode(Node):
             f"{suffix:02d} mod 6 = {p_value}; {mapping_text}")
         if self.params["student_id"] == "00000000":
             self.get_logger().warning("Set student_name and student_id before the final demo")
-        mode = "offline mock (test only)" if self.params["mock_llm"] else "9Router"
+        mode = "offline mock (test only)" if self.params["mock_llm"] else "Gemini"
         self.get_logger().info(f"Planner mode: {mode}; listening on /user_command")
 
     def report(self, status, message, step=None):

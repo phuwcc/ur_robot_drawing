@@ -1,4 +1,4 @@
-"""Exercise 9Router planning and validation without starting the robot stack."""
+"""Exercise Gemini planning and validation without starting the robot stack."""
 
 import argparse
 import json
@@ -6,21 +6,20 @@ import json
 from ament_index_python.packages import get_package_share_directory
 
 from .config import load_world, student_mapping
-from .planner import NineRouterPlanner, PlannerError
+from .planner import GeminiPlanner, PlannerError
 from .validator import PlanValidationError, parse_and_validate
 
 
-DEFAULT_MODEL = "oc/muse-spark-1.3-contributor-free"
+DEFAULT_MODEL = "gemini-2.5-flash"
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Test command -> 9Router -> JSON extraction -> validation only."
+        description="Test command -> Gemini -> JSON -> validation only."
     )
     parser.add_argument("command", help="Vietnamese or English robot command")
-    parser.add_argument("--base-url", default="http://127.0.0.1:20128/v1")
     parser.add_argument("--model", default=DEFAULT_MODEL)
-    parser.add_argument("--api-key-env", default="NINE_ROUTER_API_KEY")
+    parser.add_argument("--api-key-env", default="GEMINI_API_KEY")
     parser.add_argument("--timeout", type=float, default=30.0)
     parser.add_argument("--student-name", default="YOUR_NAME")
     parser.add_argument("--student-id", default="00000000")
@@ -32,9 +31,7 @@ def main():
     )
     world = load_world(config_path)
     _, _, mapping = student_mapping(args.student_id)
-    planner = NineRouterPlanner(
-        args.base_url, args.model, args.api_key_env, args.timeout
-    )
+    planner = GeminiPlanner(args.model, args.api_key_env, args.timeout)
     try:
         raw = planner.plan(
             args.command,
