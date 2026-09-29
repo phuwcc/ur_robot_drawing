@@ -1,0 +1,13 @@
+# ROS 2 / colcon
+build/
+install/
+log/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Feature branches mounted as nested worktrees on main
+/ur_drawing/
+/ur_llm_control/

@@ -1,7 +1,5 @@
 """Deterministic robot skills. No LLM output reaches MoveIt directly."""
 
-import copy
-
 
 class SkillExecutor:
     def __init__(self, moveit, gripper, config, report):
@@ -14,6 +12,14 @@ class SkillExecutor:
         }
         self.held = None
         self.scene_initialized = False
+
+    def _grasp_targets(self, position):
+        motion = self.config["motion"]
+        tcp_offset = float(motion["tool_length"]) + float(
+            motion["grasp_height_offset"])
+        target = [position[0], position[1], position[2] + tcp_offset]
+        above = [target[0], target[1], target[2] + motion["approach_height"]]
+        return motion["grasp_orientation"], tcp_offset, above, target
 
     def initialize(self):
         if self.scene_initialized:
@@ -49,14 +55,7 @@ class SkillExecutor:
 
         position = self.positions[object_id]
         size = float(self.config["objects"][object_id]["size"])
-        motion = self.config["motion"]
-        orientation = motion["grasp_orientation"]
-        tcp_offset = (
-            float(motion["tool_length"])
-            + float(motion["grasp_height_offset"])
-        )
-        above = [position[0], position[1], position[2] + tcp_offset + motion["approach_height"]]
-        grasp = [position[0], position[1], position[2] + tcp_offset]
+        orientation, tcp_offset, above, grasp = self._grasp_targets(position)
 
         ok, status = self.moveit.move_to_pose(above, orientation, f"move above {object_id}")
         if not ok:
@@ -69,7 +68,7 @@ class SkillExecutor:
             return status
         try:
             self.moveit.attach_object(object_id, size, tcp_offset)
-            self.gripper.grasp(object_id, tcp_offset)
+            self.gripper.grasp(object_id)
         except RuntimeError:
             self.moveit.restore_world_object(object_id, position, size)
             return "GRASP_FAILED"
@@ -87,14 +86,7 @@ class SkillExecutor:
 
         target = list(self.config["zones"][zone_id]["position"])
         size = float(self.config["objects"][object_id]["size"])
-        motion = self.config["motion"]
-        orientation = motion["grasp_orientation"]
-        tcp_offset = (
-            float(motion["tool_length"])
-            + float(motion["grasp_height_offset"])
-        )
-        place = [target[0], target[1], target[2] + tcp_offset]
-        above = [place[0], place[1], place[2] + motion["approach_height"]]
+        orientation, _, above, place = self._grasp_targets(target)
 
         ok, status = self.moveit.move_to_pose(above, orientation, f"move above {zone_id}")
         if not ok:
@@ -103,7 +95,7 @@ class SkillExecutor:
         if not ok:
             return status
         try:
-            self.gripper.release(target)
+            self.gripper.release()
         except RuntimeError:
             return "EXECUTION_FAILED"
 
@@ -113,7 +105,7 @@ class SkillExecutor:
         except RuntimeError:
             return "EXECUTION_FAILED"
 
-        self.positions[object_id] = copy.deepcopy(target)
+        self.positions[object_id] = list(target)
         self.held = None
         return "SUCCESS" if ok else status
 

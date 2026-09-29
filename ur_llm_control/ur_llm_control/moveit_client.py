@@ -111,6 +111,18 @@ class MoveItClient:
         constraints = Constraints()
         constraints.position_constraints = [position_constraint]
         constraints.orientation_constraints = [orientation_constraint]
+        # Equivalent IK solutions can differ by a full revolution. Keep selected
+        # joints away from their +/-2*pi bounds so the following Cartesian move
+        # still has room to descend or retreat.
+        for name, limits in self.motion.get("pose_joint_limits", {}).items():
+            lower, upper = map(float, limits)
+            joint = JointConstraint()
+            joint.joint_name = name
+            joint.position = (lower + upper) / 2.0
+            joint.tolerance_below = joint.position - lower
+            joint.tolerance_above = upper - joint.position
+            joint.weight = 1.0
+            constraints.joint_constraints.append(joint)
         return self._run(constraints, label)
 
     def move_home(self):

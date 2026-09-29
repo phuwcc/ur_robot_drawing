@@ -1,0 +1,192 @@
+diff --git a/robotiq_controllers/src/robotiq_activation_controller.cpp b/robotiq_controllers/src/robotiq_activation_controller.cpp
+index cd28efc..3fbef60 100644
+--- a/robotiq_controllers/src/robotiq_activation_controller.cpp
++++ b/robotiq_controllers/src/robotiq_activation_controller.cpp
+@@ -28,6 +28,8 @@
+ 
+ #include "robotiq_controllers/robotiq_activation_controller.hpp"
+ 
++#include <chrono>
++
+ namespace robotiq_controllers
+ {
+ controller_interface::InterfaceConfiguration RobotiqActivationController::command_interface_configuration() const
+@@ -105,23 +107,28 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn Roboti
+ bool RobotiqActivationController::reactivateGripper(std_srvs::srv::Trigger::Request::SharedPtr /*req*/,
+                                                     std_srvs::srv::Trigger::Response::SharedPtr resp)
+ {
+-  resp->success = command_interfaces_[REACTIVATE_GRIPPER_RESPONSE].set_value(ASYNC_WAITING);
+-  resp->success &= command_interfaces_[REACTIVATE_GRIPPER_CMD].set_value(1.0);
++  command_interfaces_[REACTIVATE_GRIPPER_RESPONSE].set_value(ASYNC_WAITING);
++  command_interfaces_[REACTIVATE_GRIPPER_CMD].set_value(1.0);
+ 
+-  while (true)
++  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
++  while (std::chrono::steady_clock::now() < deadline)
+   {
+-    const auto maybe_value = command_interfaces_[REACTIVATE_GRIPPER_RESPONSE].get_optional();
+-    if (maybe_value && maybe_value.value() != ASYNC_WAITING)
++    const double response = command_interfaces_[REACTIVATE_GRIPPER_RESPONSE].get_value();
++    if (response != ASYNC_WAITING)
+     {
+-      break;
++      resp->success = static_cast<bool>(response);
++      if (!resp->success)
++      {
++        resp->message = "Robotiq gripper reactivation failed";
++      }
++      return resp->success;
+     }
+     std::this_thread::sleep_for(std::chrono::milliseconds(50));
+   }
+-  // NOTE: This was previously using get_value() and implicitly casting to bool, so keeping the old behavior.
+-  // However, note that the value of this result is actually a double, so this should be revised in the future.
+-  resp->success &= static_cast<bool>(command_interfaces_[REACTIVATE_GRIPPER_RESPONSE].get_optional().value_or(false));
+ 
+-  return resp->success;
++  resp->success = false;
++  resp->message = "Timed out waiting for Robotiq gripper reactivation";
++  return false;
+ }
+ }  // namespace robotiq_controllers
+ 
+diff --git a/robotiq_description/urdf/2f_85.ros2_control.xacro b/robotiq_description/urdf/2f_85.ros2_control.xacro
+index 1ad6cd9..69241c7 100644
+--- a/robotiq_description/urdf/2f_85.ros2_control.xacro
++++ b/robotiq_description/urdf/2f_85.ros2_control.xacro
+@@ -58,37 +58,32 @@
+                 </state_interface>
+                 <state_interface name="velocity"/>
+             </joint>
+-            <!-- When simulating we need to include the rest of the gripper joints -->
++            <!-- Fortress needs explicit command interfaces for every coupled joint. -->
+             <xacro:if value="${use_fake_hardware or sim_isaac or sim_gazebo}">
+                 <joint name="${prefix}robotiq_85_right_knuckle_joint">
+-                    <xacro:unless value="${sim_gazebo}">
+-                        <state_interface name="position"/>
+-                        <state_interface name="velocity"/>
+-                    </xacro:unless>
++                    <xacro:if value="${sim_gazebo}"><command_interface name="position"/></xacro:if>
++                    <state_interface name="position"><param name="initial_value">${-gripper_closed_position}</param></state_interface>
++                    <state_interface name="velocity"/>
+                 </joint>
+                 <joint name="${prefix}robotiq_85_left_inner_knuckle_joint">
+-                    <xacro:unless value="${sim_gazebo}">
+-                        <state_interface name="position"/>
+-                        <state_interface name="velocity"/>
+-                    </xacro:unless>
++                    <xacro:if value="${sim_gazebo}"><command_interface name="position"/></xacro:if>
++                    <state_interface name="position"><param name="initial_value">${gripper_closed_position}</param></state_interface>
++                    <state_interface name="velocity"/>
+                 </joint>
+                 <joint name="${prefix}robotiq_85_right_inner_knuckle_joint">
+-                    <xacro:unless value="${sim_gazebo}">
+-                        <state_interface name="position"/>
+-                        <state_interface name="velocity"/>
+-                    </xacro:unless>
++                    <xacro:if value="${sim_gazebo}"><command_interface name="position"/></xacro:if>
++                    <state_interface name="position"><param name="initial_value">${-gripper_closed_position}</param></state_interface>
++                    <state_interface name="velocity"/>
+                 </joint>
+                 <joint name="${prefix}robotiq_85_left_finger_tip_joint">
+-                    <xacro:unless value="${sim_gazebo}">
+-                        <state_interface name="position"/>
+-                        <state_interface name="velocity"/>
+-                    </xacro:unless>
++                    <xacro:if value="${sim_gazebo}"><command_interface name="position"/></xacro:if>
++                    <state_interface name="position"><param name="initial_value">${-gripper_closed_position}</param></state_interface>
++                    <state_interface name="velocity"/>
+                 </joint>
+                 <joint name="${prefix}robotiq_85_right_finger_tip_joint">
+-                    <xacro:unless value="${sim_gazebo}">
+-                        <state_interface name="position"/>
+-                        <state_interface name="velocity"/>
+-                    </xacro:unless>
++                    <xacro:if value="${sim_gazebo}"><command_interface name="position"/></xacro:if>
++                    <state_interface name="position"><param name="initial_value">${gripper_closed_position}</param></state_interface>
++                    <state_interface name="velocity"/>
+                 </joint>
+             </xacro:if>
+ 
+diff --git a/robotiq_description/urdf/robotiq_2f_85_macro.urdf.xacro b/robotiq_description/urdf/robotiq_2f_85_macro.urdf.xacro
+index 3fd70b5..dbdcfb1 100644
+--- a/robotiq_description/urdf/robotiq_2f_85_macro.urdf.xacro
++++ b/robotiq_description/urdf/robotiq_2f_85_macro.urdf.xacro
+@@ -258,7 +258,7 @@
+             <axis xyz="0 -1 0" />
+             <origin xyz="-0.03060114 0.0 0.05490452" rpy="0 0 0" />
+             <limit lower="-0.8" upper="0.0" velocity="0.5" effort="50" />
+-            <mimic joint="${prefix}robotiq_85_left_knuckle_joint" multiplier="-1" />
++            <xacro:unless value="${sim_gazebo}"><mimic joint="${prefix}robotiq_85_left_knuckle_joint" multiplier="-1" /></xacro:unless>
+         </joint>
+ 
+         <joint name="${prefix}robotiq_85_left_finger_joint" type="fixed">
+@@ -278,7 +278,7 @@
+             <child link="${prefix}robotiq_85_left_inner_knuckle_link" />
+             <axis xyz="0 -1 0" />
+             <origin xyz="0.0127 0.0 0.06142" rpy="0 0 0" />
+-            <mimic joint="${prefix}robotiq_85_left_knuckle_joint" />
++            <xacro:unless value="${sim_gazebo}"><mimic joint="${prefix}robotiq_85_left_knuckle_joint" /></xacro:unless>
+             <limit lower="0.0" upper="0.8" velocity="0.5" effort="50" />
+         </joint>
+ 
+@@ -287,7 +287,7 @@
+             <child link="${prefix}robotiq_85_right_inner_knuckle_link" />
+             <axis xyz="0 -1 0" />
+             <origin xyz="-0.0127 0.0 0.06142" rpy="0 0 0" />
+-            <mimic joint="${prefix}robotiq_85_left_knuckle_joint" multiplier="-1" />
++            <xacro:unless value="${sim_gazebo}"><mimic joint="${prefix}robotiq_85_left_knuckle_joint" multiplier="-1" /></xacro:unless>
+             <limit lower="-0.8" upper="0.0" velocity="0.5" effort="50" />
+         </joint>
+ 
+@@ -296,7 +296,7 @@
+             <child link="${prefix}robotiq_85_left_finger_tip_link" />
+             <axis xyz="0 -1 0" />
+             <origin xyz="0.00563134 0.0 0.04718515" rpy="0 0 0" />
+-            <mimic joint="${prefix}robotiq_85_left_knuckle_joint" multiplier="-1" />
++            <xacro:unless value="${sim_gazebo}"><mimic joint="${prefix}robotiq_85_left_knuckle_joint" multiplier="-1" /></xacro:unless>
+             <limit lower="-0.8" upper="0.0" velocity="0.5" effort="50" />
+         </joint>
+ 
+@@ -305,7 +305,7 @@
+             <child link="${prefix}robotiq_85_right_finger_tip_link" />
+             <axis xyz="0 -1 0" />
+             <origin xyz="-0.00563134 0.0 0.04718515" rpy="0 0 0" />
+-            <mimic joint="${prefix}robotiq_85_left_knuckle_joint" />
++            <xacro:unless value="${sim_gazebo}"><mimic joint="${prefix}robotiq_85_left_knuckle_joint" /></xacro:unless>
+             <limit lower="0.0" upper="0.8" velocity="0.5" effort="50" />
+         </joint>
+     </xacro:macro>
+diff --git a/robotiq_driver/include/robotiq_driver/hardware_interface.hpp b/robotiq_driver/include/robotiq_driver/hardware_interface.hpp
+index 2890e62..f260649 100644
+--- a/robotiq_driver/include/robotiq_driver/hardware_interface.hpp
++++ b/robotiq_driver/include/robotiq_driver/hardware_interface.hpp
+@@ -77,7 +77,7 @@ public:
+    * parsed or CallbackReturn::ERROR if any error happens or data are missing.
+    */
+   ROBOTIQ_DRIVER_PUBLIC
+-  CallbackReturn on_init(const hardware_interface::HardwareComponentInterfaceParams& params) override;
++  CallbackReturn on_init(const hardware_interface::HardwareInfo& info) override;
+ 
+   /**
+    * Connect to the hardware.
+diff --git a/robotiq_driver/src/hardware_interface.cpp b/robotiq_driver/src/hardware_interface.cpp
+index e530d73..9f3d249 100644
+--- a/robotiq_driver/src/hardware_interface.cpp
++++ b/robotiq_driver/src/hardware_interface.cpp
+@@ -72,12 +72,12 @@ RobotiqGripperHardwareInterface::RobotiqGripperHardwareInterface(std::unique_ptr
+ {
+ }
+ 
+-hardware_interface::CallbackReturn
+-RobotiqGripperHardwareInterface::on_init(const hardware_interface::HardwareComponentInterfaceParams& params)
++hardware_interface::CallbackReturn RobotiqGripperHardwareInterface::on_init(
++    const hardware_interface::HardwareInfo& info)
+ {
+   RCLCPP_DEBUG(kLogger, "on_init");
+ 
+-  if (hardware_interface::SystemInterface::on_init(params) != CallbackReturn::SUCCESS)
++  if (hardware_interface::SystemInterface::on_init(info) != CallbackReturn::SUCCESS)
+   {
+     return CallbackReturn::ERROR;
+   }

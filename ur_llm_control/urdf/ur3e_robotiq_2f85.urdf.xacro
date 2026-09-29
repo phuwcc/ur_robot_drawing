@@ -78,14 +78,17 @@
       <plugin filename="ignition-gazebo-detachable-joint-system" name="gz::sim::systems::DetachableJoint">
         <parent_link>$(arg prefix)robotiq_85_base_link</parent_link><child_model>red_cube</child_model><child_link>link</child_link>
         <attach_topic>/gripper/red_cube/attach</attach_topic><detach_topic>/gripper/red_cube/detach</detach_topic>
+        <output_topic>/model/red_cube/detachable_joint/state</output_topic>
       </plugin>
       <plugin filename="ignition-gazebo-detachable-joint-system" name="gz::sim::systems::DetachableJoint">
         <parent_link>$(arg prefix)robotiq_85_base_link</parent_link><child_model>yellow_cube</child_model><child_link>link</child_link>
         <attach_topic>/gripper/yellow_cube/attach</attach_topic><detach_topic>/gripper/yellow_cube/detach</detach_topic>
+        <output_topic>/model/yellow_cube/detachable_joint/state</output_topic>
       </plugin>
       <plugin filename="ignition-gazebo-detachable-joint-system" name="gz::sim::systems::DetachableJoint">
         <parent_link>$(arg prefix)robotiq_85_base_link</parent_link><child_model>blue_cube</child_model><child_link>link</child_link>
         <attach_topic>/gripper/blue_cube/attach</attach_topic><detach_topic>/gripper/blue_cube/detach</detach_topic>
+        <output_topic>/model/blue_cube/detachable_joint/state</output_topic>
       </plugin>
     </gazebo>
   </xacro:if>

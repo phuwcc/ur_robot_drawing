@@ -9,6 +9,8 @@ gripper:
   closed_position: 0.65
   motion_duration: 2.0
   command_timeout: 8.0
+  bridge_timeout: 15.0
+  joint_timeout: 5.0
   touch_links:
     - ur_to_robotiq_link
     - gripper_mount_link
@@ -56,15 +58,21 @@ motion:
   velocity_scale: 0.08
   acceleration_scale: 0.08
   orientation_tolerance: 0.02
+  # Avoid equivalent IK solutions near +/-2*pi; they leave no joint travel for
+  # the short vertical Cartesian segments used by pick and place.
+  pose_joint_limits:
+    wrist_1_joint: [-3.0, 3.0]
   continuous_joints:
     - wrist_3_joint
   planning_time: 10.0
   # Keep tool Z pointing down and rotate the jaws across the row of cubes.
   grasp_orientation: [0.70710678, 0.70710678, 0.0, 0.0]
   home_joints:
-    shoulder_pan_joint: 0.0
+    shoulder_pan_joint: 1.5708
     shoulder_lift_joint: -1.5708
-    elbow_joint: 0.0
+    # Fold the elbow and wrist so the long Robotiq fingers stay clear of the
+    # forearm while returning home.
+    elbow_joint: 1.5708
     wrist_1_joint: -1.5708
     wrist_2_joint: 0.0
     wrist_3_joint: 0.0

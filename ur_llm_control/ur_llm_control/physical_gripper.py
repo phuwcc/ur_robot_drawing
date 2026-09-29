@@ -25,6 +25,8 @@ class PhysicalGripper:
         self.closed_position = float(config.get("closed_position", 0.65))
         self.motion_duration = float(config.get("motion_duration", 2.0))
         self.command_timeout = float(config.get("command_timeout", 8.0))
+        self.bridge_timeout = float(config.get("bridge_timeout", 15.0))
+        self.joint_timeout = float(config.get("joint_timeout", 5.0))
         self.joint_states = {name: None for name in self.object_names}
         self.attach_publishers = {
             name: node.create_publisher(Empty, f"/gripper/{name}/attach", 1)
@@ -34,10 +36,14 @@ class PhysicalGripper:
             name: node.create_publisher(Empty, f"/gripper/{name}/detach", 1)
             for name in self.object_names
         }
+        self.state_topics = {
+            name: f"/model/{name}/detachable_joint/state"
+            for name in self.object_names
+        }
         self.state_subscriptions = [
             node.create_subscription(
                 String,
-                f"/model/{name}/detachable_joint/state",
+                self.state_topics[name],
                 lambda message, object_id=name: self._update_state(object_id, message),
                 10,
             )
@@ -47,8 +53,7 @@ class PhysicalGripper:
         self.initialized = False
 
     def _update_state(self, object_id, message):
-        self.joint_states[object_id] = message.data
-
+        self.joint_states[object_id] = message.data.strip().lower()
 
     def _wait_future(self, future, timeout):
         deadline = time.monotonic() + timeout
@@ -95,33 +100,61 @@ class PhysicalGripper:
                 f"Robotiq gripper trajectory failed with status {response.status}"
             )
 
-    def _wait_for_bridge(self, timeout=15.0):
-        deadline = time.monotonic() + timeout
+    def _wait_for_bridge(self):
+        deadline = time.monotonic() + self.bridge_timeout
         publishers = (
             tuple(self.attach_publishers.values())
             + tuple(self.detach_publishers.values())
         )
         while time.monotonic() < deadline:
-            if all(publisher.get_subscription_count() > 0 for publisher in publishers):
+            commands_ready = all(
+                publisher.get_subscription_count() > 0
+                for publisher in publishers
+            )
+            states_ready = all(
+                self.node.count_publishers(topic) > 0
+                for topic in self.state_topics.values()
+            )
+            if commands_ready and states_ready:
                 return
             time.sleep(0.05)
         raise RuntimeError("Gazebo attach/detach topic bridge is unavailable")
 
-    def _set_joint(self, object_id, attached, timeout=3.0):
+    def _request_joint_state(self, object_id, attached, timeout):
         publishers = self.attach_publishers if attached else self.detach_publishers
         publisher = publishers.get(object_id)
         if publisher is None:
             raise RuntimeError(f"no Gazebo joint configured for {object_id}")
 
         expected = "attached" if attached else "detached"
+        self.joint_states[object_id] = None
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             publisher.publish(Empty())
-            wait_deadline = min(deadline, time.monotonic() + 0.4)
+            wait_deadline = min(deadline, time.monotonic() + 0.25)
             while time.monotonic() < wait_deadline:
                 if self.joint_states[object_id] == expected:
-                    return
+                    return True
                 time.sleep(0.02)
+        return False
+
+    def _set_joint(self, object_id, attached, timeout=None):
+        timeout = self.joint_timeout if timeout is None else timeout
+        if self._request_joint_state(object_id, attached, timeout * 0.6):
+            return
+
+        # DetachableJoint only publishes on a state transition. If the first
+        # acknowledgement was lost, repeated identical commands are silent.
+        # Toggle once, then request the target state again to obtain a fresh ACK.
+        toggled = self._request_joint_state(
+            object_id, not attached, timeout * 0.2
+        )
+        confirmed = toggled and self._request_joint_state(
+            object_id, attached, timeout * 0.2
+        )
+        if confirmed:
+            return
+
         action = "attach" if attached else "detach"
         raise RuntimeError(f"Gazebo did not confirm {action} for {object_id}")
 
@@ -136,14 +169,14 @@ class PhysicalGripper:
             self._set_joint(object_id, attached=False)
         self.initialized = True
 
-    def grasp(self, object_id, _tcp_offset):
+    def grasp(self, object_id):
         if self.held is not None:
             raise RuntimeError(f"gripper already holds {self.held}")
         self._command(self.closed_position)
         self._set_joint(object_id, attached=True)
         self.held = object_id
 
-    def release(self, _position):
+    def release(self):
         if self.held is None:
             raise RuntimeError("gripper is empty")
         object_id = self.held
