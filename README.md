@@ -50,8 +50,8 @@ git fetch origin
 git branch --track ur_drawing origin/ur_drawing
 git branch --track ur_llm_control origin/ur_llm_control
 
-git worktree add ur_drawing ur_drawing
-git worktree add ur_llm_control ur_llm_control
+git worktree add ./ur_drawing refs/heads/ur_drawing
+git worktree add ./ur_llm_control refs/heads/ur_llm_control
 ```
 
 Kiểm tra:
@@ -62,7 +62,8 @@ colcon list
 ```
 
 Nếu local branch đã tồn tại, bỏ qua hai lệnh `git branch --track` và chỉ chạy
-`git worktree add`.
+hai lệnh `git worktree add`. Dùng cú pháp `refs/heads/...` như trên để Git không
+nhầm tên branch với tên thư mục.
 
 ## 3. Build workspace
 
