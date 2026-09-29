@@ -15,7 +15,6 @@ def generate_launch_description():
         "gemini_model": "gemini-2.5-flash",
         "gemini_api_key_env": "GEMINI_API_KEY",
         "gemini_timeout": "30.0",
-        "mock_llm": "false",
     }
     arguments = [DeclareLaunchArgument(name, default_value=value) for name, value in defaults.items()]
     world_config = PathJoinSubstitution([
@@ -35,7 +34,6 @@ def generate_launch_description():
                 LaunchConfiguration("gemini_api_key_env"), value_type=str),
             "gemini_timeout": ParameterValue(
                 LaunchConfiguration("gemini_timeout"), value_type=float),
-            "mock_llm": ParameterValue(LaunchConfiguration("mock_llm"), value_type=bool),
         }],
     )
     return LaunchDescription(arguments + [node])

@@ -9,7 +9,7 @@ from std_msgs.msg import String
 from .config import load_world, student_mapping
 from .physical_gripper import PhysicalGripper
 from .moveit_cartesian_client import MoveItClient
-from .planner import GeminiPlanner, PlannerError, mock_plan
+from .planner import GeminiPlanner, PlannerError
 from .skills import SkillExecutor
 from .validator import PlanValidationError, parse_and_validate
 
@@ -25,7 +25,6 @@ class LlmSkillNode(Node):
             "gemini_model": "gemini-2.5-flash",
             "gemini_api_key_env": "GEMINI_API_KEY",
             "gemini_timeout": 30.0,
-            "mock_llm": False,
         }
         for name, value in defaults.items():
             self.declare_parameter(name, value)
@@ -57,8 +56,7 @@ class LlmSkillNode(Node):
             f"{suffix:02d} mod 6 = {p_value}; {mapping_text}")
         if self.params["student_id"] == "00000000":
             self.get_logger().warning("Set student_name and student_id before the final demo")
-        mode = "offline mock (test only)" if self.params["mock_llm"] else "Gemini"
-        self.get_logger().info(f"Planner mode: {mode}; listening on /user_command")
+        self.get_logger().info("Planner mode: Gemini; listening on /user_command")
 
     def report(self, status, message, step=None):
         payload = {"status": status, "message": message}
@@ -84,17 +82,14 @@ class LlmSkillNode(Node):
     def _process(self, command):
         try:
             self.report("PLANNING", command)
-            if self.params["mock_llm"]:
-                raw = mock_plan(command)
-            else:
-                raw = self.planner.plan(
-                    command,
-                    tuple(self.world["objects"]),
-                    tuple(self.world["zones"]),
-                    self.params["student_name"],
-                    self.params["student_id"],
-                    self.mapping,
-                )
+            raw = self.planner.plan(
+                command,
+                tuple(self.world["objects"]),
+                tuple(self.world["zones"]),
+                self.params["student_name"],
+                self.params["student_id"],
+                self.mapping,
+            )
             self.raw_pub.publish(String(data=raw))
             plan = parse_and_validate(
                 raw, set(self.world["objects"]), set(self.world["zones"]))

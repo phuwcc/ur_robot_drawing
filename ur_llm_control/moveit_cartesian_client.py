@@ -5,7 +5,7 @@ import threading
 from geometry_msgs.msg import Pose
 from moveit_msgs.action import ExecuteTrajectory
 from moveit_msgs.msg import MoveItErrorCodes
-from moveit_msgs.srv import GetCartesianPath
+from moveit_msgs.srv import GetCartesianPath, GetPositionFK
 from rclpy.action import ActionClient
 from sensor_msgs.msg import JointState
 
@@ -18,6 +18,7 @@ class MoveItClient(PoseGoalMoveItClient):
         super().__init__(node, config)
         self.cartesian_client = node.create_client(
             GetCartesianPath, "/compute_cartesian_path")
+        self.fk_client = node.create_client(GetPositionFK, "/compute_fk")
         self.execute_client = ActionClient(
             node, ExecuteTrajectory, "/execute_trajectory")
         self._joint_state_lock = threading.Lock()
@@ -33,6 +34,8 @@ class MoveItClient(PoseGoalMoveItClient):
         super().wait_ready(timeout)
         if not self.cartesian_client.wait_for_service(timeout_sec=timeout):
             raise RuntimeError("/compute_cartesian_path is unavailable")
+        if not self.fk_client.wait_for_service(timeout_sec=timeout):
+            raise RuntimeError("/compute_fk is unavailable")
         if not self.execute_client.wait_for_server(timeout_sec=timeout):
             raise RuntimeError("/execute_trajectory is unavailable")
 
@@ -42,10 +45,34 @@ class MoveItClient(PoseGoalMoveItClient):
         return super().move_to_pose(position, orientation, label)
 
     def _move_cartesian(self, position, orientation, label):
+        # A pose goal is allowed a small position/orientation tolerance. Starting
+        # the Cartesian segment with the nominal pose would therefore combine a
+        # vertical move with a correction in X/Y/orientation and can make local
+        # IK jump to a dead end. Use FK so these short segments change only Z.
+        with self._joint_state_lock:
+            joint_names = list(self._joint_positions)
+            joint_positions = [self._joint_positions[name] for name in joint_names]
+        if not joint_names:
+            raise RuntimeError("No joint state is available for Cartesian planning")
+
+        fk_request = GetPositionFK.Request()
+        fk_request.header.frame_id = self.frame_id
+        fk_request.header.stamp = self.node.get_clock().now().to_msg()
+        fk_request.fk_link_names = [self.ee_link]
+        fk_request.robot_state.joint_state.name = joint_names
+        fk_request.robot_state.joint_state.position = joint_positions
+        fk_response = self._wait(
+            self.fk_client.call_async(fk_request), 10.0, f"compute FK for {label}")
+        if (fk_response.error_code.val != MoveItErrorCodes.SUCCESS
+                or not fk_response.pose_stamped):
+            raise RuntimeError(f"MoveIt could not compute FK for {label}")
+        current = fk_response.pose_stamped[0].pose
+
         target = Pose()
-        target.position.x, target.position.y, target.position.z = map(float, position)
-        (target.orientation.x, target.orientation.y,
-         target.orientation.z, target.orientation.w) = map(float, orientation)
+        target.position.x = current.position.x
+        target.position.y = current.position.y
+        target.position.z = float(position[2])
+        target.orientation = current.orientation
 
         request = GetCartesianPath.Request()
         request.header.frame_id = self.frame_id
@@ -61,7 +88,23 @@ class MoveItClient(PoseGoalMoveItClient):
         response = self._wait(
             self.cartesian_client.call_async(request), 30.0, f"plan {label}")
         if response.error_code.val != MoveItErrorCodes.SUCCESS or response.fraction < 0.995:
-            return False, "PLANNING_FAILED"
+            self.node.get_logger().warning(
+                f"Cartesian planning for '{label}' reached "
+                f"{response.fraction * 100.0:.1f}% "
+                f"(MoveIt code {response.error_code.val}); retrying with "
+                "collision-aware pose planning"
+            )
+            current_orientation = [
+                current.orientation.x,
+                current.orientation.y,
+                current.orientation.z,
+                current.orientation.w,
+            ]
+            return super().move_to_pose(
+                [target.position.x, target.position.y, target.position.z],
+                current_orientation,
+                f"{label} fallback",
+            )
         trajectory = response.solution
         if not trajectory.joint_trajectory.points:
             return False, "PLANNING_FAILED"

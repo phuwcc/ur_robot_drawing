@@ -174,24 +174,3 @@ these rules. Student: {student_name} ({student_id}). Mapping: {mapping_text}.
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise PlannerError("Gemini returned invalid JSON") from exc
         return _response_text(body, self.model)
-
-
-def mock_plan(command):
-    """Deterministic offline planner for testing the robot stack."""
-    text = command.lower()
-    colors = {
-        "red": "red_cube", "đỏ": "red_cube", "do": "red_cube",
-        "yellow": "yellow_cube", "vàng": "yellow_cube", "vang": "yellow_cube",
-        "blue": "blue_cube", "xanh": "blue_cube",
-    }
-    obj = next((value for word, value in colors.items() if word in text), None)
-    zone = re.search(r"(?:zone|vùng|vung|ô|o)\s*[_-]?\s*([abc])\b", text)
-    if not obj and not zone and text.strip() in {"home", "go home", "về home"}:
-        return json.dumps({"plan": [{"skill": "home"}]})
-    if not obj or not zone:
-        raise PlannerError("mock mode needs a color and zone A/B/C")
-    return json.dumps({"plan": [
-        {"skill": "pick", "object": obj},
-        {"skill": "place", "object": obj, "zone": f"zone_{zone.group(1)}"},
-        {"skill": "home"},
-    ]})
