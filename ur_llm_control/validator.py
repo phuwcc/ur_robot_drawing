@@ -1,6 +1,7 @@
 """Strict validation between the untrusted LLM and the robot."""
 
 import json
+import re
 
 
 ALLOWED_SKILLS = {"pick", "place", "home"}
@@ -15,20 +16,84 @@ class PlanValidationError(ValueError):
     pass
 
 
-def ensure_final_home(plan, max_steps=10):
-    """Return a validated plan with a deterministic final home step."""
-    if plan[-1]["skill"] == "home":
-        return plan
-    if len(plan) >= max_steps:
-        raise PlanValidationError("plan has no room for the required home step")
-    return [*plan, {"skill": "home"}]
+_FENCED_JSON = re.compile(
+    r"\A```(?:json)?[ \t]*\r?\n(?P<body>.*)\r?\n```\Z",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def extract_json_object(raw, max_surrounding_text=500):
+    """Extract one top-level JSON object from conservative LLM formatting."""
+    if not isinstance(raw, str) or not raw.strip():
+        raise PlanValidationError("LLM output is empty")
+
+    text = raw.strip()
+    fence = _FENCED_JSON.fullmatch(text)
+    if fence:
+        text = fence.group("body").strip()
+    elif "```" in text:
+        raise PlanValidationError("LLM output contains an invalid Markdown fence")
+
+    try:
+        document = json.loads(text)
+    except json.JSONDecodeError:
+        document = None
+    else:
+        if not isinstance(document, dict):
+            raise PlanValidationError("LLM output JSON must be an object")
+        return document
+
+    spans = []
+    start = None
+    depth = 0
+    in_string = False
+    escaped = False
+    for index, character in enumerate(text):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+            continue
+        if character == '"':
+            in_string = True
+        elif character == "{":
+            if depth == 0:
+                start = index
+            depth += 1
+        elif character == "}":
+            if depth == 0:
+                raise PlanValidationError("LLM output contains an unmatched closing brace")
+            depth -= 1
+            if depth == 0:
+                spans.append((start, index + 1))
+                start = None
+
+    if in_string or depth:
+        raise PlanValidationError("LLM output contains a malformed JSON object")
+    if not spans:
+        raise PlanValidationError("LLM output does not contain a JSON object")
+    if len(spans) != 1:
+        raise PlanValidationError("LLM output contains multiple JSON objects")
+
+    start, end = spans[0]
+    prefix = text[:start].strip()
+    suffix = text[end:].strip()
+    if len(prefix) > max_surrounding_text or len(suffix) > max_surrounding_text:
+        raise PlanValidationError("LLM output contains too much text outside the JSON object")
+    try:
+        document = json.loads(text[start:end])
+    except json.JSONDecodeError as exc:
+        raise PlanValidationError(f"LLM output contains malformed JSON: {exc.msg}") from exc
+    if not isinstance(document, dict):
+        raise PlanValidationError("LLM output JSON must be an object")
+    return document
 
 
 def parse_and_validate(raw, objects, zones, max_steps=10):
-    try:
-        document = json.loads(raw)
-    except (TypeError, json.JSONDecodeError) as exc:
-        raise PlanValidationError(f"LLM output is not valid JSON: {exc}") from exc
+    document = extract_json_object(raw)
 
     if not isinstance(document, dict) or set(document) != {"plan"}:
         raise PlanValidationError("top level must contain exactly one key: plan")
@@ -73,4 +138,6 @@ def parse_and_validate(raw, objects, zones, max_steps=10):
 
     if held is not None:
         raise PlanValidationError(f"plan ends while still holding {held!r}")
+    if not home_seen:
+        raise PlanValidationError("plan must finish with home")
     return plan

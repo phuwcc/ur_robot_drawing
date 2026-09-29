@@ -13,8 +13,9 @@ def generate_launch_description():
         "student_name": "YOUR_NAME",
         "student_id": "00000000",
         "router_base_url": "http://127.0.0.1:20128/v1",
-        "router_model": "CHANGE_ME",
+        "router_model": "oc/muse-spark-1.3-contributor-free",
         "router_api_key_env": "NINE_ROUTER_API_KEY",
+        "router_timeout": "30.0",
         "mock_llm": "false",
     }
     arguments = [DeclareLaunchArgument(name, default_value=value) for name, value in defaults.items()]
@@ -33,6 +34,8 @@ def generate_launch_description():
             "router_model": ParameterValue(LaunchConfiguration("router_model"), value_type=str),
             "router_api_key_env": ParameterValue(
                 LaunchConfiguration("router_api_key_env"), value_type=str),
+            "router_timeout": ParameterValue(
+                LaunchConfiguration("router_timeout"), value_type=float),
             "mock_llm": ParameterValue(LaunchConfiguration("mock_llm"), value_type=bool),
         }],
     )

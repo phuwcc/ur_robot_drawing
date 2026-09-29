@@ -12,7 +12,7 @@ def test_attached_object_allows_contact_with_configured_gripper_links(monkeypatc
         "frame_id": "base_link",
         "ee_link": "tool0",
         "group_name": "ur_manipulator",
-        "motion": {},
+        "motion": {"orientation_tolerance": 0.02},
         "gripper": {"touch_links": ["left_finger_link", "right_finger_link"]},
     }
     client = moveit_client.MoveItClient(FakeNode(), config)

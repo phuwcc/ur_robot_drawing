@@ -26,6 +26,7 @@ setup(
     entry_points={
         "console_scripts": [
             "llm_skill_node = ur_llm_control.node:main",
+            "test_llm = ur_llm_control.llm_test:main",
         ],
     },
 )
