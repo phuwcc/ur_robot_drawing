@@ -51,7 +51,10 @@ class SkillExecutor:
         size = float(self.config["objects"][object_id]["size"])
         motion = self.config["motion"]
         orientation = motion["grasp_orientation"]
-        tcp_offset = size / 2.0 + float(motion["tool_length"])
+        tcp_offset = (
+            float(motion["tool_length"])
+            + float(motion["grasp_height_offset"])
+        )
         above = [position[0], position[1], position[2] + tcp_offset + motion["approach_height"]]
         grasp = [position[0], position[1], position[2] + tcp_offset]
 
@@ -86,7 +89,10 @@ class SkillExecutor:
         size = float(self.config["objects"][object_id]["size"])
         motion = self.config["motion"]
         orientation = motion["grasp_orientation"]
-        tcp_offset = size / 2.0 + float(motion["tool_length"])
+        tcp_offset = (
+            float(motion["tool_length"])
+            + float(motion["grasp_height_offset"])
+        )
         place = [target[0], target[1], target[2] + tcp_offset]
         above = [place[0], place[1], place[2] + motion["approach_height"]]
 
@@ -98,12 +104,17 @@ class SkillExecutor:
             return status
         try:
             self.gripper.release(target)
+        except RuntimeError:
+            return "EXECUTION_FAILED"
+
+        ok, status = self.moveit.move_to_pose(above, orientation, f"retreat from {zone_id}")
+        try:
             self.moveit.detach_object(object_id, target, size)
         except RuntimeError:
             return "EXECUTION_FAILED"
+
         self.positions[object_id] = copy.deepcopy(target)
         self.held = None
-        ok, status = self.moveit.move_to_pose(above, orientation, f"retreat from {zone_id}")
         return "SUCCESS" if ok else status
 
     def home(self):

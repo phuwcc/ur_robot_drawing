@@ -49,12 +49,18 @@ zones:
 
 motion:
   approach_height: 0.06
+  # tool0-to-gripper_tcp distance from the fixed joint in the robot URDF.
   tool_length: 0.176
+  # Keep the finger tips clear of the tabletop while gripping the cube sides.
+  grasp_height_offset: 0.016
   velocity_scale: 0.08
   acceleration_scale: 0.08
+  orientation_tolerance: 0.02
+  continuous_joints:
+    - wrist_3_joint
   planning_time: 10.0
-  # Tool Z points down for this quaternion (x, y, z, w).
-  grasp_orientation: [1.0, 0.0, 0.0, 0.0]
+  # Keep tool Z pointing down and rotate the jaws across the row of cubes.
+  grasp_orientation: [0.70710678, 0.70710678, 0.0, 0.0]
   home_joints:
     shoulder_pan_joint: 0.0
     shoulder_lift_joint: -1.5708

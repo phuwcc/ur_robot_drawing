@@ -102,9 +102,10 @@ class MoveItClient:
         (orientation_constraint.orientation.x, orientation_constraint.orientation.y,
          orientation_constraint.orientation.z, orientation_constraint.orientation.w) = map(
             float, orientation)
-        orientation_constraint.absolute_x_axis_tolerance = 0.08
-        orientation_constraint.absolute_y_axis_tolerance = 0.08
-        orientation_constraint.absolute_z_axis_tolerance = 0.08
+        orientation_tolerance = float(self.motion["orientation_tolerance"])
+        orientation_constraint.absolute_x_axis_tolerance = orientation_tolerance
+        orientation_constraint.absolute_y_axis_tolerance = orientation_tolerance
+        orientation_constraint.absolute_z_axis_tolerance = orientation_tolerance
         orientation_constraint.weight = 1.0
 
         constraints = Constraints()

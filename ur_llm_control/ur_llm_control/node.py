@@ -11,7 +11,7 @@ from .physical_gripper import PhysicalGripper
 from .moveit_cartesian_client import MoveItClient
 from .planner import NineRouterPlanner, PlannerError, mock_plan
 from .skills import SkillExecutor
-from .validator import PlanValidationError, ensure_final_home, parse_and_validate
+from .validator import PlanValidationError, parse_and_validate
 
 
 class LlmSkillNode(Node):
@@ -23,7 +23,7 @@ class LlmSkillNode(Node):
             "student_name": "YOUR_NAME",
             "student_id": "00000000",
             "router_base_url": "http://127.0.0.1:20128/v1",
-            "router_model": "CHANGE_ME",
+            "router_model": "oc/muse-spark-1.3-contributor-free",
             "router_api_key_env": "NINE_ROUTER_API_KEY",
             "router_timeout": 30.0,
             "mock_llm": False,
@@ -86,8 +86,6 @@ class LlmSkillNode(Node):
             if self.params["mock_llm"]:
                 raw = mock_plan(command)
             else:
-                if self.params["router_model"] == "CHANGE_ME":
-                    raise PlannerError("set router_model to a model shown by 9Router /v1/models")
                 raw = self.planner.plan(
                     command,
                     tuple(self.world["objects"]),
@@ -99,11 +97,14 @@ class LlmSkillNode(Node):
             self.raw_pub.publish(String(data=raw))
             plan = parse_and_validate(
                 raw, set(self.world["objects"]), set(self.world["zones"]))
-            plan = ensure_final_home(plan)
             normalized = json.dumps({"plan": plan}, ensure_ascii=False)
             self.plan_pub.publish(String(data=normalized))
             self.report("PLAN_VALID", normalized)
-            status = self.skills.execute(plan)
+            try:
+                status = self.skills.execute(plan)
+            except Exception as exc:  # Robot failures are not LLM failures.
+                self.report("EXECUTION_FAILED", str(exc))
+                return
             if status == "SUCCESS":
                 self.report("SUCCESS", "Plan completed")
         except PlannerError as exc:
