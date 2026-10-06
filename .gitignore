@@ -1,0 +1,11 @@
+build/
+install/
+log/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.vscode/
+
+# Keep local validation artifacts and tests out of the GitHub package.
+/docs/
+/test/
