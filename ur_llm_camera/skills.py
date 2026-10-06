@@ -12,6 +12,7 @@ class SkillExecutor:
         # Released objects stay pending until a later unobstructed camera frame
         # confirms them. More than one transfer may finish before that happens.
         self.pending_placements = {}
+        self.confirmed_placements = set()
         self.scene_initialized = False
         self.faulted = False
 
@@ -82,6 +83,7 @@ class SkillExecutor:
                 'PLACEMENT_VERIFIED',
                 f'Camera confirmed {object_id} at {zone_id}')
             del self.pending_placements[object_id]
+            self.confirmed_placements.add(object_id)
 
     def initialize(self):
         if self.faulted:
@@ -105,14 +107,16 @@ class SkillExecutor:
             for i, step in enumerate(plan):
                 self.report('RUNNING', f'Step {i+1}/{len(plan)}', step)
                 if step['skill'] == 'pick':
-                    if not self.pending_placements:
+                    if not self.pending_placements and not self.confirmed_placements:
                         self.refresh()
                     else:
                         # The arm may hide the next object while retreating from
                         # the previous destination. Accept one occluded object
                         # here and retain its camera-confirmed pre-place pose.
                         # Verify previous placements whenever they reappear.
-                        allowed = set(self.pending_placements) | {step['object']}
+                        allowed = (set(self.pending_placements) |
+                                   self.confirmed_placements |
+                                   {step['object']})
                         _, observed = self._observe_merged(
                             required=set(),
                             context=f'prepare to pick {step["object"]}',
@@ -149,8 +153,17 @@ class SkillExecutor:
         position = self.positions[object_id]
         size = float(self.config['objects'][object_id]['size'])
         orientation, _, above, grasp = self._grasp_targets(position)
-        ok, status = self.moveit.move_to_pose(above, orientation, f'move above {object_id}')
+        # Permit only gripper/object contact while previewing the grasp IK.
+        self.moveit.allow_grasp_contact(object_id, True)
+        move_to_approach = getattr(self.moveit, 'move_to_approach', None)
+        if move_to_approach is None:  # Lightweight test doubles.
+            ok, status = self.moveit.move_to_pose(
+                above, orientation, f'move above {object_id}')
+        else:
+            ok, status = move_to_approach(
+                above, grasp, orientation, f'move above {object_id}')
         if not ok:
+            self.moveit.allow_grasp_contact(object_id, False)
             return status
         if self.pending_placements:
             # Re-check any previous placement that is now visible. A placement
@@ -158,11 +171,14 @@ class SkillExecutor:
             # mandatory complete observation after the final home step.
             _, observed = self._observe_merged(
                 required=set(), excluded={object_id},
-                context=f'verify previous placement before picking {object_id}')
+                context=f'verify previous placement before picking {object_id}',
+                allowed_occluded=(set(self.pending_placements) |
+                                  self.confirmed_placements),
+                max_occluded=int(self.config['camera'].get(
+                    'max_occluded_during_transition', 2)))
             self.moveit.initialize_scene(self.positions)
             self._verify_pending_placements(observed)
         # Preserve target geometry; only the configured gripper may contact it.
-        self.moveit.allow_grasp_contact(object_id, True)
         ok, status = self.moveit.move_to_pose(grasp, orientation, f'descend to {object_id}')
         if not ok:
             self.moveit.allow_grasp_contact(object_id, False)
@@ -173,6 +189,7 @@ class SkillExecutor:
         # A temporary placement of this same object has now been consumed by
         # the expanded plan; its next release creates a new pending placement.
         self.pending_placements.pop(object_id, None)
+        self.confirmed_placements.discard(object_id)
         self.held = object_id
         self.moveit.attach_object(object_id, size, position, grasp_pose)
         ok, status = self.moveit.move_to_pose(above, orientation, f'lift {object_id}')
@@ -196,10 +213,19 @@ class SkillExecutor:
         release_position = list(target)
         release_position[2] += self.config['motion']['release_clearance']
         orientation, _, above, place = self._grasp_targets(release_position)
-        for p, label in [(above, f'move above {zone_id}'), (place, f'descend to {zone_id}')]:
-            ok, status = self.moveit.move_to_pose(p, orientation, label)
-            if not ok:
-                return status
+        move_to_approach = getattr(self.moveit, 'move_to_approach', None)
+        if move_to_approach is None:  # Lightweight test doubles.
+            ok, status = self.moveit.move_to_pose(
+                above, orientation, f'move above {zone_id}')
+        else:
+            ok, status = move_to_approach(
+                above, place, orientation, f'move above {zone_id}')
+        if not ok:
+            return status
+        ok, status = self.moveit.move_to_pose(
+            place, orientation, f'descend to {zone_id}')
+        if not ok:
+            return status
         self.gripper.release()
         self.held = None
         # Detach in MoveIt before retreat; the released block stays on the table.

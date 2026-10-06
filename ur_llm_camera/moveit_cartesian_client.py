@@ -102,21 +102,33 @@ class MoveItClient(PoseGoalMoveItClient):
             return self._move_cartesian(position, orientation, label)
         return self._move_to_near_seed_ik(position, orientation, label)
 
-    def _move_to_near_seed_ik(self, position, orientation, label):
-        """Plan to the IK solution nearest the current joint configuration.
-
-        A pose-only MoveGroup goal may be satisfied by several UR IK branches.
-        Selecting the goal joints first, with the live state as the IK seed,
-        prevents a planner from choosing an equivalent solution that turns a
-        wrist (or the shoulder) almost a full revolution.
-        """
+    def move_home(self):
+        """Return home through a high, collision-free Cartesian posture."""
+        transit = self.motion.get("home_transit_position")
+        if transit is not None:
+            ok, status = self._move_to_near_seed_ik(
+                transit,
+                self.motion["grasp_orientation"],
+                "move to home transit",
+            )
+            if not ok:
+                return False, status
+        # The UR arm can represent the same home posture with several joints
+        # shifted by 2*pi. A literal zero target can therefore command an
+        # unnecessary long wrist rotation that sweeps the gripper through the
+        # forearm. Reuse the same nearest-equivalent normalization as pose IK.
         with self._joint_state_lock:
             current_state = dict(self._joint_positions)
-        joint_names = list(current_state)
-        joint_positions = [current_state[name] for name in joint_names]
-        if not joint_names:
-            raise RuntimeError("No joint state is available for IK planning")
+        if not current_state:
+            raise RuntimeError("No joint state is available for home planning")
+        solution = {
+            name: float(value)
+            for name, value in self.motion["home_joints"].items()
+        }
+        return self._plan_joint_solution(solution, current_state, "home")
 
+    def _compute_ik(self, position, orientation, seed_state, label, warn=True):
+        """Return one collision-aware IK solution seeded by ``seed_state``."""
         request = GetPositionIK.Request()
         ik = request.ik_request
         ik.group_name = self.group_name
@@ -130,22 +142,25 @@ class MoveItClient(PoseGoalMoveItClient):
         (ik.pose_stamped.pose.orientation.x, ik.pose_stamped.pose.orientation.y,
          ik.pose_stamped.pose.orientation.z,
          ik.pose_stamped.pose.orientation.w) = map(float, orientation)
-        ik.robot_state.joint_state.name = joint_names
-        ik.robot_state.joint_state.position = joint_positions
+        ik.robot_state.joint_state.name = list(seed_state)
+        ik.robot_state.joint_state.position = list(seed_state.values())
         ik.robot_state.is_diff = True
 
         response = self._wait(
-            self.ik_client.call_async(request), 5.0, f"compute near-seed IK for {label}")
+            self.ik_client.call_async(request), 5.0, f"compute IK for {label}")
         if response.error_code.val != MoveItErrorCodes.SUCCESS:
+            if not warn:
+                return None
             self.node.get_logger().warning(
-                f"Near-seed IK failed for '{label}' "
-                f"(MoveIt code {response.error_code.val})")
-            return False, "PLANNING_FAILED"
-
-        solution = dict(zip(
+                f"IK failed for '{label}' (MoveIt code {response.error_code.val})")
+            return None
+        return dict(zip(
             response.solution.joint_state.name,
             response.solution.joint_state.position,
         ))
+
+    def _plan_joint_solution(self, solution, current_state, label):
+        """Normalize and collision-check an exact arm-joint goal."""
         arm_joint_names = list(self.motion["home_joints"])
         missing = [name for name in arm_joint_names if name not in solution]
         if missing:
@@ -175,7 +190,10 @@ class MoveItClient(PoseGoalMoveItClient):
         }
         if excessive:
             detail = ", ".join(
-                f"{name}={delta:.2f} rad" for name, delta in excessive.items())
+                f"{name}: {current[name]:.2f} -> "
+                f"{targets[arm_joint_names.index(name)]:.2f} "
+                f"(delta={delta:.2f} rad)"
+                for name, delta in excessive.items())
             self.node.get_logger().warning(
                 f"Rejected distant IK branch for '{label}': {detail}")
             return False, "PLANNING_FAILED"
@@ -191,6 +209,69 @@ class MoveItClient(PoseGoalMoveItClient):
             joint.weight = 1.0
             constraints.joint_constraints.append(joint)
         return self._run(constraints, label)
+
+    def move_to_approach(self, approach, target, orientation, label):
+        """Reach an approach pose on an IK branch that can also reach target.
+
+        Solving the lower target first and using that solution as the seed for
+        the approach prevents a short vertical segment from crossing between
+        two UR analytic/KDL branches near a joint limit.
+        """
+        with self._joint_state_lock:
+            current_state = dict(self._joint_positions)
+        if not current_state:
+            raise RuntimeError("No joint state is available for IK planning")
+        target_solution = self._compute_ik(
+            target, orientation, current_state, f"{label} target", warn=False)
+        if target_solution is None:
+            # Some KDL seeds can reach the approach pose but return NO_IK for
+            # the lower pose. Use the reachable approach branch as a second
+            # seed, then solve the approach again from that lower solution.
+            approach_hint = self._compute_ik(
+                approach, orientation, current_state,
+                f"{label} approach hint", warn=False)
+            if approach_hint is not None:
+                target_solution = self._compute_ik(
+                    target, orientation, approach_hint,
+                    f"{label} target from approach", warn=False)
+        if target_solution is None:
+            # Final deterministic retry from the configured central/home arm
+            # posture, while preserving non-arm joints from the live state.
+            central_seed = dict(current_state)
+            central_seed.update({
+                name: float(value)
+                for name, value in self.motion["home_joints"].items()
+            })
+            target_solution = self._compute_ik(
+                target, orientation, central_seed,
+                f"{label} target from central seed", warn=False)
+        if target_solution is None:
+            self.node.get_logger().warning(
+                f"IK failed for '{label} target' after live, approach, "
+                "and central seeds")
+            return False, "PLANNING_FAILED"
+        approach_solution = self._compute_ik(
+            approach, orientation, target_solution, f"{label} approach")
+        if approach_solution is None:
+            return False, "PLANNING_FAILED"
+        return self._plan_joint_solution(approach_solution, current_state, label)
+
+    def _move_to_near_seed_ik(self, position, orientation, label):
+        """Plan to the IK solution nearest the current joint configuration.
+
+        A pose-only MoveGroup goal may be satisfied by several UR IK branches.
+        Selecting the goal joints first, with the live state as the IK seed,
+        prevents a planner from choosing an equivalent solution that turns a
+        wrist (or the shoulder) almost a full revolution.
+        """
+        with self._joint_state_lock:
+            current_state = dict(self._joint_positions)
+        if not current_state:
+            raise RuntimeError("No joint state is available for IK planning")
+        solution = self._compute_ik(position, orientation, current_state, label)
+        if solution is None:
+            return False, "PLANNING_FAILED"
+        return self._plan_joint_solution(solution, current_state, label)
 
     def _move_cartesian(self, position, orientation, label):
         # A pose goal is allowed a small position/orientation tolerance. Starting

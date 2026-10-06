@@ -71,19 +71,46 @@ def expand_plan(plan, positions, config, reachable=None):
         result.extend([{'skill': 'pick', 'object': obj},
                        {'skill': 'place', 'object': obj, 'zone': zone}])
         state[obj] = list(target)
+    requested = []
     for i, action in enumerate(plan):
-        if action['skill'] == 'home':
-            result.append(action.copy())
-        elif action['skill'] == 'pick':
-            if i+1 >= len(plan) or plan[i+1]['skill'] != 'place':
-                raise PlanValidationError('Transfers must use adjacent pick/place steps')
-            obj = action['object']; zone = plan[i+1]['zone']
-            if obj not in state:
-                raise SceneError(f'Object not observed: {obj}')
-            for other in blockers(cfg['zones'][zone]['position'], state, cfg, obj):
-                temp = f'temporary_{len(cfg["zones"])}'
-                cfg['zones'][temp] = {'position': find_free_position(state, cfg, other, reachable)}
-                transfer(other, temp)
-            transfer(obj, zone)
+        if action['skill'] != 'pick':
+            continue
+        if i+1 >= len(plan) or plan[i+1]['skill'] != 'place':
+            raise PlanValidationError('Transfers must use adjacent pick/place steps')
+        requested.append((action['object'], plan[i+1]['zone'], len(requested)))
+
+    # Move a requested object out of another requested destination first. Then
+    # fill the most constrained (closely neighboring) destination before its
+    # outer neighbors. This avoids placing a cube beside an object that still
+    # has to be grasped, as in the initial blue-at-B arrangement.
+    destination_blockers = set()
+    for obj, zone, _ in requested:
+        destination_blockers.update(
+            blockers(cfg['zones'][zone]['position'], state, cfg, obj))
+    zone_spacing = 2.0 * float(config['workspace']['zone_clearance'])
+    all_requested = tuple(requested)
+
+    def placement_neighbors(zone):
+        point = cfg['zones'][zone]['position']
+        return sum(
+            math.dist(point[:2], cfg['zones'][other_zone]['position'][:2]) < zone_spacing
+            for _, other_zone, _ in all_requested if other_zone != zone
+        )
+
+    requested.sort(key=lambda item: (
+        item[0] not in destination_blockers,
+        -placement_neighbors(item[1]),
+        item[2],
+    ))
+    for obj, zone, _ in requested:
+        if obj not in state:
+            raise SceneError(f'Object not observed: {obj}')
+        for other in blockers(cfg['zones'][zone]['position'], state, cfg, obj):
+            temp = f'temporary_{len(cfg["zones"])}'
+            cfg['zones'][temp] = {'position': find_free_position(state, cfg, other, reachable)}
+            transfer(other, temp)
+        transfer(obj, zone)
+    if plan and plan[-1]['skill'] == 'home':
+        result.append(plan[-1].copy())
     parse_and_validate(json.dumps({'plan': result}), set(cfg['objects']), set(cfg['zones']), max_steps=50)
     return result, cfg['zones']

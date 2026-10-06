@@ -92,10 +92,12 @@ motion:
   - wrist_2_joint
   - wrist_3_joint
   equivalent_angle_joint_limits:
-    shoulder_pan_joint: [-6.283185, 6.283185]
-    shoulder_lift_joint: [-6.283185, 6.283185]
-    wrist_1_joint: [-6.283185, 6.283185]
-    wrist_2_joint: [-6.283185, 6.283185]
+    # Leave a small numerical margin around +/-2*pi. Using 6.283185 exactly
+    # rejected the mathematically equivalent -2*pi candidate by 3e-7 rad.
+    shoulder_pan_joint: [-6.284, 6.284]
+    shoulder_lift_joint: [-6.284, 6.284]
+    wrist_1_joint: [-6.284, 6.284]
+    wrist_2_joint: [-6.284, 6.284]
   # Reject a distant IK branch even if it reaches the same tool pose. The
   # normalized shortest angular displacement cannot exceed pi.
   max_pose_joint_delta: 3.2
@@ -106,6 +108,13 @@ motion:
   - 0.70710678
   - 0.0
   - 0.0
+  # Move the open gripper above the middle of the table before folding the
+  # arm into its joint-space home posture. This keeps the fingers clear of the
+  # forearm instead of relying on a single long joint-space interpolation.
+  home_transit_position:
+  - 0.32
+  - 0.05
+  - 0.46
   home_joints:
     shoulder_pan_joint: 1.5708
     shoulder_lift_joint: -1.5708
@@ -140,7 +149,10 @@ workspace:
   - 0.48
   - -0.27
   - 0.285
-  clearance: 0.025
+  # Cube centers in neighboring zones are 80 mm apart. With 50 mm cubes, a
+  # 15 mm occupancy margin preserves separation without camera noise making a
+  # correctly placed cube in Zone C appear to occupy Zone B as well.
+  clearance: 0.015
   grid_step: 0.025
   zone_clearance: 0.07
   placement_tolerance: 0.018
