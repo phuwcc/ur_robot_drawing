@@ -1,33 +1,38 @@
-# Bài 03 — UR3e + Robotiq + Camera + LLM Skill Planning
+# UR3e Camera-Grounded Natural-Language Skill Control
 
-Package ROS 2 Humble/Gazebo Fortress độc lập, phát triển từ `ur_llm_control`.
+ROS 2 Humble package điều khiển UR3e + Robotiq 2F-85 bằng lệnh tự nhiên và
+camera RGB trong Gazebo Fortress. Gemini chỉ tạo kế hoạch `pick/place/home`;
+camera cung cấp tọa độ vật, validator kiểm tra kế hoạch trước khi MoveIt và
+Gazebo thực thi. LLM không được điều khiển tọa độ hoặc khớp trực tiếp.
 
 ```text
-/user_command → Gemini → validator cú pháp
-                              ↓
-/camera/image → nhận diện → trạng thái bàn → giải phóng zone → validator kế hoạch
-                                                            ↓
-                            camera xác nhận ← Gazebo ← MoveIt 2 ← skills
+/user_command → Gemini → validator → xử lý occupancy → skills → MoveIt → Gazebo
+                       ↑                                      ↓
+                 trạng thái bàn ← nhận diện màu ← /camera/image
 ```
 
 ## Build
 
-Workspace đang dùng nằm tại `/home/phuc/ur_robot_drawing`.
-Dùng đường dẫn tuyệt đối dưới đây, kể cả khi terminal đang mở trong workspace.
-
-Từ thư mục gốc workspace, áp dụng patch Robotiq và cài dependency như README gốc.
-
 ```bash
-cd /home/phuc/ur_robot_drawing
+cd ~/ur_robot_drawing
 source /opt/ros/humble/setup.bash
 rosdep install --ignore-src --from-paths ur_llm_camera -r -y
 colcon build --packages-select ur_llm_camera --symlink-install
 source install/setup.bash
 ```
 
-## Demo zone bị chiếm
+## Gemini API key
 
-Terminal 1: 
+Tạo key tại [Google AI Studio](https://aistudio.google.com/app/apikey) và export
+trong terminal chạy node. Không lưu API key trong source hoặc Git.
+
+```bash
+export GEMINI_API_KEY='YOUR_KEY'
+```
+
+## Chạy
+
+Terminal 1 — simulation, MoveIt và RViz:
 
 ```bash
 cd ~/ur_robot_drawing
@@ -36,130 +41,133 @@ source install/setup.bash
 ros2 launch ur_llm_camera simulation.launch.py
 ```
 
-Terminal 2 (chờ MoveIt và các controller active):
+Chờ Gazebo, controller và MoveIt khởi động xong.
+
+Terminal 2 — Gemini, camera perception và skill executor:
 
 ```bash
 cd ~/ur_robot_drawing
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 export GEMINI_API_KEY='YOUR_KEY'
+
 ros2 launch ur_llm_camera llm_control.launch.py \
-  student_name:="Dinh Van Phuc" student_id:="23020756"
+  student_name:="Dinh Van Phuc" \
+  student_id:="23020756" \
+  gemini_model:="gemini-2.5-flash"
 ```
- 
-Terminal 3:
+
+Terminal 3 — gửi lệnh:
 
 ```bash
-cd ~/ur_robot_drawing
 source /opt/ros/humble/setup.bash
-source install/setup.bash
+source ~/ur_robot_drawing/install/setup.bash
+
+ros2 topic pub --once /user_command std_msgs/msg/String \
+  "{data: 'Arrange all objects according to my student ID.'}"
+```
+
+Ví dụ điều khiển một vật:
+
+```bash
 ros2 topic pub --once /user_command std_msgs/msg/String \
   "{data: 'Put the red cube in Zone B.'}"
 ```
 
-World ban đầu có blue_cube trong zone_b, bốn block còn lại trên bàn. Camera
-phải nhận đủ 5 block mới cho phép lập kế hoạch. Kế hoạch mở rộng mong đợi:
+## Cá nhân hóa theo MSSV
 
-```json
-{"plan":[
-  {"skill":"pick","object":"blue_cube"},
-  {"skill":"place","object":"blue_cube","zone":"temporary_3"},
-  {"skill":"pick","object":"red_cube"},
-  {"skill":"place","object":"red_cube","zone":"zone_b"},
-  {"skill":"home"}
-]}
+Hai số cuối của `student_id` được dùng để tính `P = XX mod 6`, từ đó xác định
+màu cần đặt vào Zone A, B và C. Mapping được in khi node khởi động.
+
+Với `student_id=23020756`:
+
+```text
+56 mod 6 = 2
+Zone A → Yellow
+Zone B → Red
+Zone C → Blue
 ```
 
-`temporary_3` được tính từ ảnh, kích thước block, biên bàn, khoảng hở và vùng
-làm việc; không phải pose cố định. Các điểm tạm còn phải qua MoveIt IK
-ở cả độ cao tiếp cận và độ cao thả với collision checking. Nếu không tìm được chỗ trống, robot dừng.
-Sau mỗi `place`, robot lùi lên rồi đi thẳng tới vật tiếp theo. Camera xác nhận
-các vật vừa thả ngay khi chúng hiện lại trong ảnh; nếu cánh tay vẫn che, kết quả
-được giữ ở trạng thái chờ thay vì dừng chuỗi. Sau bước `home` cuối cùng, camera
-bắt buộc phải thấy và xác nhận tất cả kết quả còn chờ. Khi chạy lại, trạng thái
-mới tiếp tục lấy từ ảnh.
-Trong chuyển tiếp, tối đa hai vật đã định danh có thể tạm bị che: vật vừa thả và
-vật sắp gắp. Nếu một vật không liên quan cũng biến mất khỏi ảnh, robot vẫn dừng.
+Lệnh `Arrange all objects according to my student ID.` yêu cầu robot sắp xếp
+ba cube theo mapping này. Kế hoạch có nhiều cặp `pick/place` liên tiếp và chỉ
+thực hiện `home` một lần sau bước cuối cùng.
 
-## Camera và hiệu chuẩn
+## Xử lý zone bị chiếm
 
-- Camera RGB thật trong Gazebo, 800×800, 10 Hz; không đọc model pose/topic pose.
-- OpenCV tách màu HSV, kiểm tra diện tích/hình dạng, loại màu xuất hiện nhiều
-  ứng viên. Zone dùng màu xám để không bị nhận nhầm là block.
-- Camera đặt tại `[0.43, 0, 1.3]`, pitch `pi/2`, yaw 0 trong world/base_link.
-  Chiếu pinhole pixel lên mặt trên block, rồi suy ra tâm block bằng kích thước
-  đã biết. Đây là hiệu chuẩn hình học cho bàn phẳng và cube nằm thẳng, không
-  phải hệ thống 6D pose cho vật nghiêng, chồng lên nhau hoặc camera tùy ý.
-- `config/world.yaml` chỉ chứa kích thước block, hình học bàn/zone, hiệu chuẩn
-  camera và giới hạn robot. Pose spawn chỉ có trong SDF, không dùng để lập kế hoạch.
-- Mất ảnh, ảnh cũ, thiếu block, nhiều ứng viên cùng màu hoặc chưa ổn định đều
-  chặn chuyển động. Vật bị che không được coi là zone trống.
-- Nếu đổi pose/FOV/resolution camera, sửa đồng thời SDF và cấu hình calibration.
-  Nếu đổi kích thước bàn/cube, sửa cả hai. Không dùng cấu hình này cho robot thật.
+World ban đầu đặt `blue_cube` trong Zone B. Nếu cần đưa `red_cube` vào Zone B,
+lớp xử lý scene sẽ tìm một vị trí trống, kiểm tra IK và collision, rồi mở rộng
+kế hoạch:
 
-Theo dõi:
+```text
+pick blue_cube → place temporary_N
+pick red_cube  → place zone_b
+home
+```
+
+`temporary_N` được tính từ ảnh camera, biên bàn, kích thước cube và khoảng hở;
+đây không phải tọa độ cố định. Nếu không có vị trí trống và reachable, robot
+dừng trước khi gắp.
+
+## Camera và vật bị che
+
+- Camera RGB 800×800, 10 Hz; OpenCV nhận diện năm cube theo màu HSV.
+- Tọa độ cube được chiếu từ pixel xuống mặt bàn trong frame `base_link`.
+- Hệ thống không đọc model pose từ Gazebo để lập kế hoạch.
+- Ảnh phải mới, ổn định và không có nhiều ứng viên cùng màu.
+- Khi tay robot che vật vừa thả hoặc vật sắp gắp, hệ thống tạm dùng vị trí
+  camera xác nhận gần nhất. Vật sẽ được xác nhận lại khi hiện ra trong ảnh.
+- Sau `home` cuối cùng, mọi placement còn chờ đều phải được camera xác nhận.
+
+Xem ảnh detection:
+
+```bash
+ros2 run rqt_image_view rqt_image_view /camera/detections
+```
+
+## Cấu hình
+
+- `config/world.yaml`: bàn, cube, zone, camera, gripper và giới hạn chuyển động.
+- `planner.py`: gọi Gemini REST API và yêu cầu structured JSON.
+- `validator.py`: chỉ chấp nhận skill, object và zone nằm trong whitelist.
+- `scene.py`: kiểm tra occupancy và tìm vị trí tạm khi zone bị chiếm.
+- `perception.py`, `camera_state.py`: nhận diện màu và kiểm tra frame ổn định.
+- `skills.py`: thực thi `pick`, `place`, `home` và xác nhận placement.
+- `moveit_*.py`: planning scene, Cartesian motion và fallback tránh va chạm.
+- `physical_gripper.py`: Robotiq controller và Gazebo attach/detach.
+
+## Topics
+
+| Topic | Nội dung |
+|---|---|
+| `/user_command` | Lệnh tự nhiên |
+| `/camera/image` | Ảnh RGB từ Gazebo |
+| `/camera/detections` | Ảnh có kết quả nhận diện |
+| `/perception/world_state` | Tọa độ cube và occupancy của các zone |
+| `/llm/raw_response` | JSON từ Gemini |
+| `/llm/validated_plan` | Kế hoạch đã kiểm tra và mở rộng |
+| `/execution_status` | Trạng thái planner và robot |
+
+Theo dõi trạng thái:
 
 ```bash
 ros2 topic echo /perception/world_state
 ros2 topic echo /llm/validated_plan
 ros2 topic echo /execution_status
-# Nếu đã cài rqt_image_view:
-ros2 run rqt_image_view rqt_image_view /camera/detections
 ```
 
-`zones` liệt kê block có footprint xâm phạm vùng đặt (có margin). Danh sách rỗng
-chỉ có ý nghĩa khi `complete=true` và ảnh còn mới. `objects` là tọa độ đo từ ảnh.
+Các trạng thái và lỗi chính:
 
-## Gripper và collision checking
+- `PERCEPTION_READY`: camera đã cung cấp trạng thái bàn hợp lệ.
+- `PLAN_VALID`: kế hoạch đã qua validator và xử lý occupancy.
+- `PLACEMENT_VERIFIED`: camera xác nhận cube ở đúng vị trí thả.
+- `LLM_FAILED`: API key, mạng, model hoặc quota Gemini.
+- `INVALID_PLAN`: JSON không qua validator.
+- `PLANNING_FAILED`: MoveIt không tìm được đường đi an toàn.
+- `EXECUTION_FAILED`: camera, controller, gripper hoặc chuyển động thất bại.
+- `BUSY`: robot đang thực thi lệnh khác.
+- `SUCCESS`: toàn bộ kế hoạch đã hoàn tất.
 
-Robotiq 2F-85 có controller thật trong mô phỏng. Khi đã đến pose gắp đo bởi
-camera và FK xác nhận vị trí/hướng, robot đóng ngón, tạo fixed joint bằng
-Gazebo DetachableJoint, nâng và di chuyển block. Khi thả, ngón mở, joint được
-tháo ở độ cao 1 cm trên mặt đặt và block rơi xuống bàn bằng vật lý Gazebo.
-Khoảng hở này tránh ép cube xuyên mặt bàn khi có sai số camera/IK. Không gọi set_pose hoặc teleport object.
-Đây là grasp có hỗ trợ joint, không phải mô hình ma sát ngón tay thuần túy.
-Với cube 50 mm, controller đóng tới 0.35 rad (khẩu độ mesh khoảng
-50.7 mm), không ép tới trạng thái đóng kín. Collision object khi gắp giữ
-nguyên pose camera trong frame tool bằng FK thực tế tại thời điểm attach.
-
-Fortress trong workspace khởi tạo các detachable joint ở trạng thái attached.
-Executor tháo cả năm và nhận ACK **trước khi điều khiển gripper/robot**, rồi mới
-lấy ảnh ổn định, dựng planning scene và về home. Khi mất ACK, không tự toggle sang attach để tránh gắn vật từ xa.
-Nếu node hoặc thao tác gặp lỗi, khởi động lại cả simulation và node trước demo tiếp.
-
-MoveIt giữ collision box cho bàn và toàn bộ block đo được. Chỉ cho phép contact
-của block đang gắp với touch links của gripper; các vật khác vẫn được collision
-check. Khi giữ, collision object gắn với tool; khi thả, nó trở lại world trước
-khi robot rút lên. Cartesian path và fallback pose planning đều kiểm tra va chạm. Đoạn Cartesian
-có bước nhảy joint trên 0.15 rad bị loại trước khi thực thi để tránh nhảy nhánh IK.
-
-## LLM, validator và skill
-
-- `planner.py`: Gemini chỉ sinh `pick(object)`, `place(object, zone)`, `home()`.
-  Camera state được đưa vào context; LLM không được sinh pose, joint hay trajectory.
-- `validator.py`: whitelist skill/object/zone, cấm khóa thừa, kiểm tra cầm/thả và
-  home cuối kế hoạch.
-- `scene.py`: mô phỏng trạng thái qua từng bước, tìm các vật cản, chọn vị trí tạm,
-  chèn transfer và validate lại toàn bộ chuỗi trước khi chạy.
-- `skills.py`: kiểm tra camera/occupancy trước transfer và trước place, cập nhật
-  planning scene, thực thi và dùng camera xác nhận kết quả.
-- `perception.py`, `camera_state.py`: nhận diện, timestamp, kiểm tra ảnh ổn định.
-
-Khi scene đổi trong lúc Gemini trả lời, executor lấy ảnh mới và mở rộng kế hoạch
-lại trước khi thực thi. Khi scene đổi trong lúc robot đang chạy, robot dừng nếu
-precondition không còn đúng; không tự tiếp tục với pose cũ. Workspace demo giả
-định không có người hoặc vật mới đi vào bàn giữa một đoạn chuyển động.
-
-## Nội dung video và báo cáo
-
-1. Hiển thị đủ UR3e, gripper, camera, bàn, 3 zone và 5 block; blue_cube trong B.
-2. Hiển thị ảnh detection và world_state; giải thích hiệu chuẩn pixel → tọa độ.
-3. Gửi lệnh, hiển thị raw LLM plan và validated expanded plan.
-4. Quay liên tục blue_cube → chỗ tạm, red_cube → B, robot về home.
-5. Hiển thị `PLACEMENT_VERIFIED`/`SUCCESS` và trạng thái camera cuối.
-6. Trình bày xử lý ảnh thiếu/cũ, hết chỗ, plan sai, lỗi MoveIt hoặc gripper.
-7. Ghi rõ giới hạn nhận diện màu và grasp hỗ trợ fixed joint; nộp link GitHub,
-   video thực tế và báo cáo. Package không tự tạo video hoặc đẩy repository.
-
-Tài liệu Gazebo: [Sensors Fortress](https://gazebosim.org/docs/fortress/sensors/),
-[DetachableJoint Fortress](https://github.com/gazebosim/gz-sim/tree/ign-gazebo6/src/systems/detachable_joint).
+Nếu Cartesian path không đạt 100%, node tự chuyển sang collision-aware pose
+planning. Dòng `retrying with collision-aware pose planning` là fallback bình
+thường, không phải lỗi kết thúc. Nếu execution thất bại sau khi robot đã di
+chuyển vật, hãy khởi động lại cả simulation và node trước lần chạy tiếp theo.
